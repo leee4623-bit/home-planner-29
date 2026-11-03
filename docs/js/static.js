@@ -1,0 +1,9 @@
+window.FP_STATIC = true;
+document.addEventListener('DOMContentLoaded', function () {
+  var bar = document.createElement('div'); bar.className = 'preview-bar'; bar.setAttribute('role', 'note');
+  bar.innerHTML = '<strong>시연판</strong> — 서버 없이 이 브라우저 안에서 동작합니다. 데이터는 이 기기에만 저장되고, 권한 분리는 시연용입니다(실제 보안은 서버판). <button type="button" class="link-btn" id="resetDemo">시연 데이터 처음으로</button>';
+  document.body.insertBefore(bar, document.body.firstChild);
+  document.getElementById('resetDemo').addEventListener('click', function () {
+    FP.UI.dialog({ title: '시연 데이터를 처음으로 되돌릴까요?', body: '<p>이 기기에서 저장한 계획 버전·기록·설문·알림이 모두 지워지고 처음 시연 상태로 돌아갑니다.</p>', actions: [{ text: '취소' }, { text: '처음으로', cls: 'btn-danger', onClick: function () { FP.MockServer.reset(); location.hash = ''; location.reload(); } }] });
+  });
+});

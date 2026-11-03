@@ -1,0 +1,11 @@
+{
+  "name": "home-planner-29",
+  "version": "2.1.0",
+  "private": true,
+  "description": "설계사가 재무계획을 세우고 고객이 매월 실행을 확인하는 주거자금 설계 PWA",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --no-warnings server/server.js",
+    "test": "node tests/engine.test.js && node --no-warnings tests/api.test.js && node --no-warnings tests/features.test.js"
+  }
+}

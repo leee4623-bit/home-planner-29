@@ -1,0 +1,16 @@
+# Render 배포 설정 — GitHub에 올린 뒤 Render에서 "Blueprint"로 연결하면 이 설정대로 만들어집니다.
+services:
+  - type: web
+    name: home-planner-29
+    runtime: node
+    plan: free            # 무료: 15분간 접속이 없으면 잠들고, 다시 켜질 때 시연 데이터가 처음 상태로 돌아감
+    buildCommand: echo "빌드 필요 없음"
+    startCommand: node --no-warnings server/server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: FP_DEMO_PASSWORD
+        sync: false       # 배포할 때 비밀번호를 직접 입력(1234처럼 쉬운 값은 공개 주소에 쓰지 않기)
