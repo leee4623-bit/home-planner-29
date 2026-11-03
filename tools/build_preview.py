@@ -24,7 +24,7 @@ for f in order:
         js.append(rd(f))
 css = rd('public/css/styles.css') + '\n.preview-bar{background:var(--warn-bg);color:var(--fg);font-size:12.5px;padding:6px max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px));}\n'
 reset = "document.getElementById('resetDemo').addEventListener('click',function(){FP.UI.dialog({title:'시연 데이터를 처음으로 되돌릴까요?',body:'<p>이 브라우저에서 저장한 계획 버전·기록·거래가 모두 지워지고 처음 시연 상태로 돌아갑니다.</p>',actions:[{text:'취소'},{text:'처음으로',cls:'btn-danger',onClick:function(){FP.MockServer.reset();location.hash='';location.reload();}}]});});"
-out = ('<title>내집마련 플래너 29</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n'
+out = ('<title>재무플래너</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n'
        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">\n'
        '<style>\n' + css + '\n</style>\n' + body + '\n<script>window.FP_PREVIEW = true;</script>\n<script>\n' + '\n'.join(j for j in js if 'fonts.googleapis' not in j or 'createElement' not in j) + '\n' + reset + '\n</script>\n')
 os.makedirs(os.path.join(R, 'dist'), exist_ok=True)

@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
 h = rd('public/index.html')
 h = h.replace('<script src="js/data/policies.js"></script>', '<script src="js/static.js"></script>\n<script src="js/data/policies.js"></script>')
 h = h.replace('<script src="js/ui/app.js"></script>', '<script src="js/data/sampleCase.js"></script>\n<script src="js/linking.js"></script>\n<script src="js/mockApi.js"></script>\n<script src="js/ui/app.js"></script>')
-h = h.replace('<title>내집마련 플래너 29</title>', '<title>내집마련 플래너 29 (시연판)</title>')
+h = h.replace('<title>재무플래너</title>', '<title>재무플래너 (시연판)</title>')
 wr('index.html', h)
 css = rd('public/css/styles.css') + '\n.preview-bar{background:var(--warn-bg);color:var(--fg);font-size:12.5px;padding:6px max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px));}\n'
 wr('css/styles.css', css)

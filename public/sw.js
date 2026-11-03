@@ -2,7 +2,7 @@
  * 서비스 워커 — 앱 화면 파일만 저장합니다. /api 응답(개인 재무 데이터)은 절대 저장하지 않습니다.
  * 배포 후 파일을 고치면 VERSION을 올려야 사용자에게 '업데이트' 안내가 뜹니다.
  */
-var VERSION = 'v2.1.0';
+var VERSION = 'v2.1.1';
 var CACHE = 'fp-shell-' + VERSION;
 var FILES = ['./', './index.html', './manifest.webmanifest', './css/styles.css', './js/fonts.js',
   './js/data/policies.js', './js/engine/calc.js', './js/engine/analysis.js', './js/data/riskConfig.js', './js/engine/risk.js', './js/engine/strategies.js', './js/engine/monthly.js', './js/install.js',
@@ -27,7 +27,7 @@ self.addEventListener('fetch', function (e) {
 // Web Push 수신 — 잠금 화면에는 서버가 보낸 요약만 표시(기본: 금액 없음)
 self.addEventListener('push', function (e) {
   var d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: '새 알림이 있습니다.' }; }
-  e.waitUntil(self.registration.showNotification(d.title || '내집마련 플래너', { body: d.body || '새 알림이 있습니다. 앱에서 확인해 주세요.', tag: d.tag || 'fp', icon: './icons/icon-192.png', badge: './icons/icon-192.png', data: { url: d.url || '/#inbox' } }));
+  e.waitUntil(self.registration.showNotification(d.title || '재무플래너', { body: d.body || '새 알림이 있습니다. 앱에서 확인해 주세요.', tag: d.tag || 'fp', icon: './icons/icon-192.png', badge: './icons/icon-192.png', data: { url: d.url || '/#inbox' } }));
 });
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();

@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-title 내집마련 플래너 서버
+title 재무플래너 서버
 where node >nul 2>nul
 if errorlevel 1 (
   echo.

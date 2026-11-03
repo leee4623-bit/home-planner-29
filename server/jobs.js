@@ -133,7 +133,7 @@ async function dispatch(db, cid, keys, opts) {
   const sender = opts.sender || ((sub, payload) => push.send(keys, sub, payload, process.env.FP_VAPID_SUBJECT || 'mailto:planner-demo@example.com'));
   let sent = 0;
   for (const n of pend) {
-    const payload = { title: '내집마련 플래너', body: ctx.notif.lockDetails ? n.fact : '새 알림이 있습니다. 앱에서 확인해 주세요.', tag: n.dkey, url: '/#inbox' };
+    const payload = { title: '재무플래너', body: ctx.notif.lockDetails ? n.fact : '새 알림이 있습니다. 앱에서 확인해 주세요.', tag: n.dkey, url: '/#inbox' };
     let okAny = false;
     for (const s of subs) {
       try {

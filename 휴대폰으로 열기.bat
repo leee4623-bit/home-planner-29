@@ -26,7 +26,7 @@ if "%CF%"=="cloudflared" (
 )
 echo.
 echo 1) 앱 서버를 새 창에서 켭니다. (그 창도 닫지 마세요)
-start "내집마련 플래너 서버" cmd /k node --no-warnings server\server.js
+start "재무플래너 서버" cmd /k node --no-warnings server\server.js
 timeout /t 3 >nul
 echo 2) 휴대폰용 주소를 만듭니다. 아래에 나오는
 echo    https://xxxx.trycloudflare.com  주소를 휴대폰에서 여세요.

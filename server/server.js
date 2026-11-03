@@ -1,5 +1,5 @@
 /*
- * 내집마련 플래너 서버
+ * 재무플래너 서버
  * 실행: node server/server.js   (PORT, FP_DB, FP_DEMO_PASSWORD 환경변수 사용 가능)
  * - public/ 의 PWA 파일을 제공하고 /api/* 요청을 처리합니다.
  * - 외부 패키지 없이 Node 22+ 기본 기능만 사용합니다.
@@ -123,7 +123,7 @@ if (require.main === module) {
     process.exit(1);
   });
   server.listen(port, () => {
-    console.log('내집마련 플래너 서버: http://localhost:' + port);
+    console.log('재무플래너 서버: http://localhost:' + port);
     if (seeded) console.log('시연 계정이 생성되었습니다 → 설계사 ' + seeded.planner + ' / 고객 ' + seeded.client + ' / 비밀번호 ' + seeded.password);
   });
 }

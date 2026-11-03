@@ -226,7 +226,7 @@ function extend(add, db, h) {
     need(q.user.role === 'client', 403, '고객만 시험할 수 있습니다.');
     const subs = db.prepare('SELECT * FROM push_subs WHERE user_id = ?').all(q.user.id); need(subs.length, 409, '이 기기에서 알림 받기를 먼저 켜 주세요.');
     const push = require('./push'); let ok = 0, last = null;
-    for (const s of subs) { try { const r = await push.send(pushKeys, { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, { title: '내집마련 플래너', body: '시험 알림입니다.', tag: 'test', url: '/#inbox' }, process.env.FP_VAPID_SUBJECT || 'mailto:planner-demo@example.com'); last = r.status; if (r.ok) ok++; if (r.gone) db.prepare('DELETE FROM push_subs WHERE id = ?').run(s.id); } catch (e) { last = e.message; } }
+    for (const s of subs) { try { const r = await push.send(pushKeys, { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, { title: '재무플래너', body: '시험 알림입니다.', tag: 'test', url: '/#inbox' }, process.env.FP_VAPID_SUBJECT || 'mailto:planner-demo@example.com'); last = r.status; if (r.ok) ok++; if (r.gone) db.prepare('DELETE FROM push_subs WHERE id = ?').run(s.id); } catch (e) { last = e.message; } }
     return { sent: ok, total: subs.length, lastStatus: last };
   });
   void HttpError; void Analysis;

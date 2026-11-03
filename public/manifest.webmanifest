@@ -1,6 +1,6 @@
 {
-  "name": "내집마련 플래너 29",
-  "short_name": "내집플래너",
+  "name": "재무플래너",
+  "short_name": "재무플래너",
   "description": "설계사가 재무계획을 세우고 고객이 매월 실행을 확인하는 주거자금 설계 서비스",
   "lang": "ko",
   "start_url": "./index.html",
