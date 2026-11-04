@@ -2,3 +2,8 @@
 node_modules/
 *.db*
 /dist/
+
+.env
+.env.*
+!.env.example
+backup-*.json

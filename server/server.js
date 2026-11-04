@@ -37,11 +37,24 @@ async function createServer(opts) {
   opts = opts || {};
   const dbFile = opts.dbFile || process.env.FP_DB || path.join(__dirname, '..', 'data', 'planner.db');
   const dbUrl = opts.dbUrl !== undefined ? opts.dbUrl : process.env.DATABASE_URL;
+  if (process.env.NODE_ENV === 'production' && !opts.db) {
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) throw new Error('운영 환경에는 SESSION_SECRET(32자 이상) 환경변수가 필요합니다. Render → Environment에서 설정하세요.');
+    if (!dbUrl) console.warn('[주의] DATABASE_URL이 없어 서버 디스크(SQLite)에 저장합니다. Render 무료 서버는 재시작 때 디스크가 지워집니다.');
+  }
   const db = opts.db || await open(dbUrl ? { url: dbUrl } : { file: dbFile });
   db.bus = db.bus || changes.createBus();
   const demoMode = opts.demo !== undefined ? !!opts.demo : process.env.FP_DEMO !== '0';
   const seeded = await seed(db, { password: opts.password, demo: demoMode });
-  const pushKeys = push.loadKeys(opts.db || dbUrl ? null : path.join(path.dirname(dbFile), 'vapid.json'));
+  if (!demoMode) await db.run('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE demo = 1)'); // 운영 모드: 남은 시연 세션 정리
+  // 푸시 서명 키: DB(app_meta)에 보관 → 서버를 다시 시작·재배포해도 기존 푸시 구독이 유지됨
+  let pushKeys = null;
+  const pk = await db.get("SELECT value FROM app_meta WHERE key = 'vapid'");
+  if (pk) { try { pushKeys = JSON.parse(pk.value); } catch (e) { pushKeys = null; } }
+  if (!pushKeys) {
+    pushKeys = push.loadKeys(opts.db || dbUrl ? null : path.join(path.dirname(dbFile), 'vapid.json'));
+    await db.run('INSERT OR IGNORE INTO app_meta (key, value, updated_at) VALUES (?,?,?)', 'vapid', JSON.stringify(pushKeys), new Date().toISOString());
+    const saved = await db.get("SELECT value FROM app_meta WHERE key = 'vapid'"); pushKeys = JSON.parse(saved.value);
+  }
   const table = routes(db, { pushKeys, demoMode });
   const adminApi = admin.adminRoute(db);
   const timers = [];
@@ -122,7 +135,9 @@ async function createServer(opts) {
       const email = String(b.email || '').trim().toLowerCase();
       const key = (req.socket.remoteAddress || '') + '|' + email;
       if (auth.rateLimited(key)) return send(res, 429, { error: '로그인 시도가 많습니다. 10분 뒤에 다시 시도해 주세요.' });
-      const u = await db.get('SELECT id, pw_hash, disabled FROM users WHERE email = ?', email);
+      const u = await db.get('SELECT id, pw_hash, disabled, demo FROM users WHERE email = ?', email);
+      // 시연 계정(공용 비밀번호)은 시연 모드에서만 로그인 가능 — 실제 운영(FP_DEMO=0)에서는 차단
+      if (u && Number(u.demo) && !demoMode) { auth.noteFail(key); return send(res, 401, { error: '시연 계정은 시연 모드에서만 사용할 수 있습니다.' }); }
       if (!u || Number(u.disabled) || !auth.verifyPassword(b.password, u.pw_hash)) { auth.noteFail(key); return send(res, 401, { error: u && Number(u.disabled) ? '사용이 중지된 계정입니다.' : '이메일 또는 비밀번호가 맞지 않습니다.' }); }
       const token = await auth.createSession(db, u.id);
       return send(res, 200, { ok: true }, { 'Set-Cookie': auth.cookie(token, secureCookie) });

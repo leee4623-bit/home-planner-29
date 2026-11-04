@@ -80,9 +80,11 @@ function adminRoute(db) {
   const token = process.env.FP_ADMIN_TOKEN || '';
   return async (req, url, body) => {
     if (!token) return { status: 404, body: { error: '없는 요청입니다.' } };
+    const rl = 'admin|' + (req.socket.remoteAddress || '');
+    if (require('./auth').rateLimited(rl)) return { status: 429, body: { error: '관리자 토큰 시도가 많습니다. 10분 뒤에 다시 시도해 주세요.' } };
     const got = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     const a = Buffer.from(crypto.createHash('sha256').update(got).digest('hex')), b = Buffer.from(crypto.createHash('sha256').update(token).digest('hex'));
-    if (!got || !crypto.timingSafeEqual(a, b)) return { status: 401, body: { error: '관리자 토큰이 맞지 않습니다.' } };
+    if (!got || !crypto.timingSafeEqual(a, b)) { require('./auth').noteFail(rl); return { status: 401, body: { error: '관리자 토큰이 맞지 않습니다.' } }; }
     const op = url.pathname.replace('/api/admin/', '');
     try {
       if (req.method === 'GET' && op === 'list') return { status: 200, body: await listAll(db) };

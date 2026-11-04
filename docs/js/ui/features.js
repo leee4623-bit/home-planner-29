@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   var FP = root.FP, C = FP.Calc, U = FP.UI, F = U.F, esc = U.esc, R = FP.Risk, CFG = FP.RiskConfig, M = FP.Monthly, doc = root.document;
-  var NTYPE = { overspend: '예산 초과', savingShort: '납입 부족', emergencyLow: '비상금 부족', goalFlip: '목표 판정 변경', surplus: '여유자금 확인', revision: '수정안' };
+  var NTYPE = { overspend: '예산 초과', savingShort: '납입 부족', emergencyLow: '비상금 부족', goalFlip: '목표 판정 변경', goalShort: '목표 예상액 부족', surplus: '여유자금 확인', revision: '수정안' };
 
   // 탭 목록은 planner.js·client.js에서 정합니다.
 

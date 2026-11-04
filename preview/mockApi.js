@@ -13,7 +13,7 @@
   var KEY = 'fp3-demo-db', PW = '1234', CD = FP.ClientData;
   var CATS = /^(debt|emergency|housing|expense|expense:essential|expense:optional|income|product:[A-Za-z0-9_-]{1,20})$/;
   var TYPES = ['안정형', '안정추구형', '위험중립형', '적극투자형', '공격투자형'];
-  var DEF_NOTIF = { types: { overspend: true, savingShort: true, emergencyLow: true, goalFlip: true, surplus: true, revision: true }, quietStart: '22:00', quietEnd: '08:00', push: false, lockDetails: false };
+  var DEF_NOTIF = { types: { overspend: true, savingShort: true, emergencyLow: true, goalFlip: true, goalShort: true, surplus: true, revision: true }, quietStart: '22:00', quietEnd: '08:00', push: false, lockDetails: false };
   var DEF_CONSENT = { enabled: false, monthlyLimit: 100000, floor: 0, agreedAt: null };
   function now() { return new Date().toISOString(); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }

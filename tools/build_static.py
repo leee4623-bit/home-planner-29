@@ -5,6 +5,7 @@ R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(R, 'docs')
 shutil.rmtree(OUT, ignore_errors=True)
 shutil.copytree(os.path.join(R, 'public'), OUT)
+for f in ('admin.html', 'js/admin.js'): os.remove(os.path.join(OUT, f))  # 관리 화면은 서버판 전용
 rd = lambda p: open(os.path.join(R, p), encoding='utf-8').read()
 wr = lambda p, s: open(os.path.join(OUT, p), 'w', encoding='utf-8').write(s)
 # 계좌 분류 규칙(서버 모듈)을 브라우저용으로

@@ -8,8 +8,10 @@
   },
   "scripts": {
     "start": "node --no-warnings server/server.js",
-    "test": "node tests/engine.test.js && node --no-warnings tests/api.test.js && node --no-warnings tests/features.test.js && node --no-warnings tests/products.test.js",
-    "test:pg": "node --no-warnings tests/api.test.js && node --no-warnings tests/features.test.js",
-    "admin": "node --no-warnings server/admin.js"
+    "test": "node tests/engine.test.js && node --no-warnings tests/api.test.js && node --no-warnings tests/features.test.js && node --no-warnings tests/products.test.js && node --no-warnings tests/deploy.test.js",
+    "test:pg": "node --no-warnings tests/api.test.js && node --no-warnings tests/features.test.js && node --no-warnings tests/deploy.test.js",
+    "admin": "node --no-warnings server/admin.js",
+    "migrate": "node --no-warnings server/migrate.js",
+    "backup": "node --no-warnings server/backup.js"
   }
 }

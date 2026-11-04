@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS plan_offers (id INTEGER PRIMARY KEY, client_id INTEGE
 CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, source TEXT NOT NULL, category TEXT NOT NULL, ukey TEXT NOT NULL, company TEXT, name TEXT, data TEXT NOT NULL, fetched_at TEXT NOT NULL, UNIQUE (source, ukey));
 CREATE TABLE IF NOT EXISTS product_meta (source TEXT PRIMARY KEY, fetched_at TEXT, ok INTEGER, error TEXT, count INTEGER, attempted_at TEXT);
 CREATE TABLE IF NOT EXISTS product_requests (id INTEGER PRIMARY KEY, client_id INTEGER NOT NULL REFERENCES clients(id), product TEXT NOT NULL, simulation TEXT NOT NULL, status TEXT NOT NULL, created_by INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS changes_client ON changes (client_id, id);
 `;
 // 이전 버전 DB(내 PC)에 없는 열 추가
@@ -107,12 +108,33 @@ async function openSqlite(file) {
   return wrap(exec, { kind: 'sqlite', begin: () => raw.exec('BEGIN IMMEDIATE'), commit: () => raw.exec('COMMIT'), rollback: () => raw.exec('ROLLBACK'), close: () => raw.close() });
 }
 
-async function openPg(url) {
-  const client = require('./pg').createClient(url);
-  for (const stmt of SCHEMA.split(';').map((x) => x.trim()).filter(Boolean)) {
-    await client.query(stmt.replace(/INTEGER PRIMARY KEY/g, 'BIGSERIAL PRIMARY KEY'));
+// Postgres 스키마 = migrations/*.sql (순서대로, 적용 기록은 schema_migrations)
+const MIG_DIR = path.join(__dirname, '..', 'migrations');
+function pgSchemaSql() {
+  return SCHEMA.split(';').map((x) => x.trim()).filter(Boolean).map((x) => x.replace(/INTEGER PRIMARY KEY/g, 'BIGSERIAL PRIMARY KEY') + ';')
+    .concat(MIGRATIONS.map(([t, c, def]) => 'ALTER TABLE ' + t + ' ADD COLUMN IF NOT EXISTS ' + c + ' ' + def + ';')).join('\n');
+}
+async function migratePg(client, log) {
+  await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)');
+  const done = new Set((await client.query('SELECT name FROM schema_migrations')).rows.map((r) => r.name));
+  const files = fs.readdirSync(MIG_DIR).filter((f) => /^\d+_.*\.sql$/.test(f)).sort();
+  const applied = [];
+  for (const f of files) {
+    if (done.has(f)) continue;
+    const sql = fs.readFileSync(path.join(MIG_DIR, f), 'utf8').replace(/--.*$/gm, '');
+    await client.query('BEGIN');
+    try {
+      for (const stmt of sql.split(/;\s*$/m).map((x) => x.trim()).filter(Boolean)) await client.query(stmt);
+      await client.query('INSERT INTO schema_migrations (name, applied_at) VALUES ($1, $2)', [f, new Date().toISOString()]);
+      await client.query('COMMIT'); applied.push(f); if (log) log('적용: ' + f);
+    } catch (e) { await client.query('ROLLBACK'); e.message = f + ': ' + e.message; throw e; }
   }
-  for (const [t, c, def] of MIGRATIONS) await client.query('ALTER TABLE ' + t + ' ADD COLUMN IF NOT EXISTS ' + c + ' ' + def);
+  return { applied, total: files.length };
+}
+
+async function openPg(url, opts) {
+  const client = require('./pg').createClient(url);
+  await migratePg(client, opts && opts.log);
   const exec = {
     get: async (sql, ...p) => (await client.query(toPg(sql), p)).rows[0],
     all: async (sql, ...p) => (await client.query(toPg(sql), p)).rows,
@@ -146,8 +168,9 @@ function wrap(exec, ctl) {
 
 async function open(opts) {
   opts = opts || {};
-  if (opts.url) return openPg(opts.url);
+  if (opts.url) return openPg(opts.url, opts);
   return openSqlite(opts.file || ':memory:');
 }
 
-module.exports = { open, toPg };
+function tableNames() { return [...SCHEMA.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]); }
+module.exports = { open, toPg, pgSchemaSql, migratePg, tableNames, WITH_ID };

@@ -13,7 +13,7 @@ const Monthly = require('../public/js/engine/monthly.js');
 const push = require('./push');
 const changes = require('./changes');
 
-const DEFAULT_NOTIF = { types: { overspend: true, savingShort: true, emergencyLow: true, goalFlip: true, surplus: true, revision: true }, quietStart: '22:00', quietEnd: '08:00', push: true, lockDetails: false };
+const DEFAULT_NOTIF = { types: { overspend: true, savingShort: true, emergencyLow: true, goalFlip: true, goalShort: true, surplus: true, revision: true }, quietStart: '22:00', quietEnd: '08:00', push: true, lockDetails: false };
 const DEFAULT_CONSENT = { enabled: false, monthlyLimit: 100000, floor: 0, agreedAt: null };
 
 function nowIso(d) { return (d || new Date()).toISOString(); }

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>재무플래너 관리</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main class="wrap admin-page" style="max-width:760px;margin:0 auto;padding:16px">
+  <h1>재무플래너 관리(계정·담당 배정)</h1>
+  <p class="small">Render → 서비스 → Environment의 <code>FP_ADMIN_TOKEN</code> 값을 붙여 넣으세요. 토큰은 이 화면 안에서만 쓰고 저장하지 않습니다(새로 고침하면 사라짐). 토큰이 설정되지 않은 서버에서는 이 기능이 꺼져 있습니다.</p>
+  <section class="card"><div class="field"><label for="tok">관리자 토큰</label><input id="tok" type="password" autocomplete="off"></div><button class="btn" type="button" id="listBtn">계정 목록 보기</button></section>
+  <section class="card"><h2>계정 만들기</h2>
+    <div class="field-grid">
+      <div class="field"><label for="nEmail">이메일</label><input id="nEmail" type="email"></div>
+      <div class="field"><label for="nName">이름</label><input id="nName" type="text"></div>
+      <div class="field"><label for="nRole">역할</label><select id="nRole"><option value="client">고객</option><option value="planner">설계사</option></select></div>
+      <div class="field"><label for="nPw">처음 비밀번호(8자 이상)</label><input id="nPw" type="password" autocomplete="new-password"></div>
+    </div><button class="btn" type="button" id="addBtn">만들기</button></section>
+  <section class="card"><h2>담당 배정</h2>
+    <div class="field-grid">
+      <div class="field"><label for="aPl">설계사 이메일</label><input id="aPl" type="email"></div>
+      <div class="field"><label for="aCl">고객 이메일</label><input id="aCl" type="email"></div>
+    </div><div class="btn-row"><button class="btn" type="button" id="asgBtn">배정</button><button class="btn btn-secondary" type="button" id="unBtn">배정 해제</button></div></section>
+  <section class="card"><h2>계정 사용 중지</h2><div class="field"><label for="dEmail">이메일</label><input id="dEmail" type="email"></div><div class="btn-row"><button class="btn btn-secondary" type="button" id="disBtn">사용 중지</button><button class="btn btn-secondary" type="button" id="enBtn">다시 사용</button></div></section>
+  <section class="card"><h2>결과</h2><pre id="out" class="small" style="white-space:pre-wrap"></pre></section>
+  <p><a href="./">앱으로 돌아가기</a></p>
+</main>
+<script src="js/admin.js"></script>
+</body>
+</html>

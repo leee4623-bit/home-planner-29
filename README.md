@@ -20,8 +20,8 @@ Node.js 22.5 이상. 외부 패키지가 없어 `npm install`이 필요 없습�
 
 ```bash
 npm start            # http://localhost:8080
-npm test             # 계산 19 + 서버·동기화 30 + 추가 기능 19 + 상품 비교 13
-TEST_DATABASE_URL=postgres://… npm run test:pg   # 같은 서버 시험을 실제 Postgres로
+npm test             # 계산 19 + 서버·동기화 30 + 추가 기능 19 + 상품 비교 13 + 배포 6
+TEST_DATABASE_URL=postgres://… npm run test:pg   # 같은 서버 시험 + 마이그레이션·재시작·백업 복구를 실제 Postgres로
 ```
 
 시연 모드(기본)에서는 빈 DB에 아래 가상 계정이 만들어집니다(비밀번호 `FP_DEMO_PASSWORD`, 기본 `1234`).
@@ -44,7 +44,7 @@ npm run admin -- assign       p@example.com c@example.com
 npm run admin -- unassign     p@example.com c@example.com   # 기존 실시간 구독도 차단
 npm run admin -- disable      p@example.com
 ```
-배포 서버에서는 Render Shell에서 같은 명령을 쓰거나, `FP_ADMIN_TOKEN`을 넣어 `/api/admin/*`(Authorization: Bearer 토큰)을 호출합니다.
+배포 서버(Render 무료에는 Shell이 없음)에서는 `https://(내 주소)/admin.html` 관리 화면을 씁니다(아래 ‘배포하기’ 3번).
 
 ## v3 바뀐 점
 
@@ -55,45 +55,91 @@ npm run admin -- disable      p@example.com
 
 ## 배포 구조와 선택 이유
 
-**선택: 앱 전체(화면+API)를 Render 웹 서비스 하나로 옮기고, 데이터는 외부 Postgres(Neon 무료 등)에 저장. 실시간은 SSE.**
+**구성: Node.js 서버(Render 웹 서비스 1개) + Neon PostgreSQL + SSE 실시간.** 화면(PWA)도 같은 서버가 제공합니다.
 
-- 화면과 API가 같은 주소라 쿠키 인증·SSE가 그대로 동작하고 CORS 설정이 필요 없습니다(GitHub Pages + 별도 백엔드는 다른 주소라 쿠키·CORS 설정이 추가로 필요).
-- Render 무료 서버는 디스크가 지워지므로 고객 데이터는 외부 Postgres에 둡니다. 서버가 잠들었다 깨어나도 데이터가 남습니다.
-- 실시간은 서버가 DB 저장을 마친 뒤 SSE(`/api/events`)로 보냅니다. 끊기면 브라우저가 자동으로 다시 연결해 마지막 번호 이후 변경을 받고, 세 번 실패하면 15초마다 `/api/sync`로 조회합니다. 휴대폰 PWA도 같은 코드입니다.
-- GitHub Pages는 **시연판**으로 남깁니다(동기화 없음). 시연판의 ‘내 데이터 내보내기’ 파일은 서버판에서 내용을 미리 보고 확인한 뒤 가져올 수 있습니다.
-- 한계: 서버 1대 기준(이벤트를 프로세스 안에서 전달). 여러 대로 늘리면 Postgres LISTEN/NOTIFY 등으로 바꿔야 합니다.
+- 화면과 API가 같은 주소라 로그인 쿠키(HttpOnly·SameSite=Strict)와 실시간 연결이 추가 설정 없이 동작하고, 모바일 웹·설치형 앱(PWA)이 모두 같은 서버를 씁니다.
+- Render 무료 서버는 재시작·재배포·휴면 때 디스크가 지워지므로 모든 공통 데이터는 Neon에 저장합니다. 브라우저 localStorage는 공통 데이터 저장에 쓰지 않습니다(시연판만 예외).
+- **SSE를 고른 이유:** 이 앱의 실시간은 "서버 → 화면" 방향 알림이 대부분이고, 저장은 이미 일반 요청(PATCH/POST)으로 버전 확인을 거칩니다. SSE는 일반 HTTP 위에서 동작해 같은 로그인 쿠키·권한 검사를 그대로 쓰고, 브라우저가 끊기면 자동으로 다시 연결하며 마지막 번호(Last-Event-ID)부터 놓친 변경을 받습니다. 외부 패키지 없이 구현할 수 있어 기존 구조(의존성 0개)와 충돌하지 않습니다. 양방향 실시간 대화가 필요해지면 WebSocket으로 바꿀 수 있습니다.
+- 기존 기술과 충돌한 점: npm 패키지(pg 등)를 쓰지 않는 구조라 Postgres 연결을 직접 구현했습니다(`server/pg.js`, SCRAM 인증·TLS 지원). 내 PC 실행은 계속 SQLite 파일을 씁니다(`DATABASE_URL`이 없을 때).
 
-### 코드로 구현한 부분
-- 공용 DB 저장(고객 정보·월별 실적·계획 버전·고객 배정·알림·변경 이력), 외부 패키지 없는 Postgres 연결(SCRAM·TLS)
-- 서버 권한 검사(모든 API·실시간 구독), 배정 해제 시 기존 구독 즉시 차단, 비활성 계정 차단
-- 고객 정보 버전·항목별 버전 충돌 검사(409), 중복 요청 방지(Idempotency-Key), 같은 달·항목 실적 대체
-- 변경 이력(변경자·시각·항목·데이터 버전), 설계사 초안/제시안/고객 선택안 구분, 작성 중 기준 정보 변경 안내
-- 공시 API 조회·실패 기록(하루 1회 + 설계사 수동 갱신), 관리자 명령·API
+### 데이터베이스 구조(주요 표)
+| 표 | 내용 |
+|---|---|
+| users / sessions | 고객·설계사 계정(역할, scrypt 비밀번호 해시, 시연 여부, 사용 중지), 로그인 세션(토큰의 HMAC만 저장) |
+| clients / assignments | 고객 프로필, 설계사↔고객 담당 배정 |
+| client_data | 고객이 한 페이지에서 입력한 소득·지출·자산·부채·주거목표·목표 시점(버전·항목별 버전) |
+| risk_profiles | 위험성향(금융기관 결과, 앱 설문 결과) |
+| plans / baselines / plan_offers | 재무설계안(계산에 쓴 가정 전체를 버전별 보관), 실행 기준 이력, 설계사 제시·고객 선택 |
+| strategy_sets / revisions | A/B/C안, 실적 반영 조정안(제안으로 저장, 고객 확인 전 확정 계획 불변) |
+| records / month_closures / scheduled / transactions | 월별 실제 입력값, 월 확정, 예정 결제, 거래내역 |
+| notifications / push_subs / notif_settings | 앱 내 알림, 푸시 구독, 알림 설정 |
+| changes / audit / idem | 변경 이력(변경자·시각·항목·데이터 버전), 감사 기록, 중복 요청 방지 |
+| app_meta / schema_migrations | 푸시 서명 키 등 서버 설정, 적용한 마이그레이션 |
 
-### 내가 서비스에서 설정해야 하는 부분
-1. **Neon**(https://neon.tech) 가입 → 프로젝트 만들기 → Connection string 복사(`postgres://…?sslmode=require`).
-2. **Render** → New → Blueprint → 이 저장소 선택 → 아래 환경변수 입력 → 배포.
-3. (선택) **금융감독원 금융상품 한눈에** 오픈API(https://finlife.fss.or.kr) 인증키 발급 → `FSS_API_KEY`에 입력.
-4. 실제 운영으로 쓸 때: `FP_DEMO=0`, 관리자 명령으로 실제 계정 생성·배정.
+스키마 파일: `migrations/001_init.sql`. 적용: 서버가 시작할 때 아직 적용하지 않은 파일을 자동 적용하고, 직접 하려면 `DATABASE_URL`을 환경변수로 지정한 뒤 `npm run migrate`. 이미 적용한 파일은 다시 실행하지 않으며 데이터를 지우지 않습니다.
 
-### 환경변수(Render → 서비스 → Environment에 입력, 코드·GitHub에 넣지 않음)
-| 이름 | 필수 | 설명 |
-|---|---|---|
-| `DATABASE_URL` | 배포 시 필수 | Neon 등 Postgres 연결 문자열(`sslmode=require`) |
-| `FP_DEMO_PASSWORD` | 시연 모드면 권장 | 시연 계정 비밀번호 |
-| `FP_DEMO` | 선택 | 1=시연 모드(기본), 0=끔 |
-| `FP_ADMIN_TOKEN` | 선택 | 관리자 API 토큰(render.yaml이 자동 생성) |
-| `FSS_API_KEY` | 선택 | 공시 상품 조회 인증키. 없으면 공시 상품을 표시하지 않음 |
-| `FP_VAPID_SUBJECT` | 선택 | Web Push 연락처(mailto:) |
+### 알림: 앱 내 알림과 푸시 알림은 따로입니다
+- **앱 내 알림(구현):** 비상금 부족, 목표 예상액 부족, 계획 대비 지출 초과, 납입 부족, 새 제안·조정안. 앱을 열면 ‘알림’ 화면과 실시간 표시로 보입니다.
+- **푸시 알림(구현, 실제 휴대폰 미검증):** 앱이 닫혀 있을 때 Web Push로 보냅니다. 고객이 ‘알림’ 화면에서 켜야 하고, 아이폰은 홈 화면에 설치한 앱에서만 됩니다. **Render 무료 서버가 잠든 동안에는 정기 점검과 푸시가 보내지지 않습니다.**
 
-### 배포 후 검증 방법
-1. `https://(내 주소)/api/health` → `{"ok":true,"db":"postgres"}` 인지 확인.
-2. PC 브라우저에서 설계사, 휴대폰(또는 다른 브라우저)에서 고객으로 로그인. 위쪽 상태가 ‘실시간 연결됨’인지 확인.
-3. 고객이 ‘내 정보·실적 입력’에서 값을 바꾸고 저장 → 설계사 화면에 몇 초 안에 ‘고객 정보가 업데이트되었습니다’와 변경 항목이 뜨는지 확인.
-4. 설계사가 ‘계획 버전·제시’에서 새 안을 저장하고 ‘고객에게 제시’ → 고객 화면에 새 제안 알림 → 선택 전 ‘진단·판정’의 실행 기준이 그대로인지, 선택 후 바뀌는지 확인.
-5. 휴대폰을 비행기 모드로 잠시 두었다가 풀고, 그 사이 다른 쪽에서 저장한 값이 나타나는지 확인.
-6. Render 서비스를 재시작(Manual Deploy)한 뒤 다시 로그인해 값이 남아 있는지 확인(Postgres 저장 확인).
-7. ‘상품 비교’에서 공시 자료 상태(확인 시각·개수 또는 ‘미연결/조회 실패’)를 확인. 인증키를 넣었다면 실제 응답의 기관명·금리를 금융상품 한눈에 사이트와 한두 개 대조.
+## 배포하기(초보자용 순서)
+
+비밀번호·연결 문자열은 **채팅이나 코드에 붙여 넣지 말고**, 아래 각 서비스의 설정 화면에 직접 입력하세요.
+
+### 1) Neon에서 데이터베이스 만들기
+1. https://neon.com 접속 → **Sign up**(GitHub 계정으로 가입 가능).
+2. **Create project**: Project name `home-planner`, Postgres 버전은 기본값, Region은 **AWS Asia Pacific (Singapore)** 등 가까운 곳 → Create.
+3. 프로젝트 화면의 **Connect** 버튼 → Connection string에서 **Pooled connection은 끄고**(직접 연결) 표시된 `postgresql://…?sslmode=require` 문자열을 **복사만** 해 둡니다(어디에도 붙여 넣지 말고 2)에서 바로 사용).
+
+### 2) Render에 서버 만들기
+1. https://render.com → **Get Started** → GitHub로 가입·로그인 → GitHub 권한 요청에서 `home-planner-29` 저장소 접근 허용.
+2. 대시보드 **New + → Blueprint** → 저장소 `leee4623-bit/home-planner-29` 선택 → Blueprint 이름 입력.
+3. 값 입력 화면이 나오면:
+   - `DATABASE_URL`: 1)에서 복사한 Neon 문자열 붙여 넣기
+   - `FP_DEMO_PASSWORD`: 시연 계정 비밀번호(공개 주소이므로 1234 말고 새 값 권장)
+   - `FSS_API_KEY`: 없으면 비워 둠
+   - `SESSION_SECRET`, `FP_ADMIN_TOKEN`은 Render가 자동으로 만듭니다.
+4. **Apply / Deploy** → 몇 분 뒤 `https://home-planner-29.onrender.com` 같은 주소가 생깁니다(이름이 겹치면 뒤에 글자가 붙음).
+5. 값을 나중에 바꾸려면: 서비스 → **Environment** → 수정 → Save(자동 재배포).
+
+### 3) 실제 계정 만들기(시연 계정과 분리)
+- 시연 모드(`FP_DEMO=1`)의 `@demo.kr` 계정은 시연 비밀번호를 쓰는 **가상 계정**이고, `FP_DEMO=0`으로 바꾸면 로그인이 막힙니다.
+- 실제 계정은 **`https://(내 주소)/admin.html`** 에서 만듭니다: Render → 서비스 → Environment에서 `FP_ADMIN_TOKEN` 값을 확인(눈 모양 버튼)해 그 화면에 붙여 넣고 → 계정 만들기(8자 이상 비밀번호) → 담당 배정. 무료 서버에는 Render Shell이 없어서 이 화면(또는 같은 기능의 `/api/admin/*`)을 씁니다.
+- 실제 운영으로 전환: Environment에서 `FP_DEMO`를 `0`으로 저장.
+
+### 4) 배포 후 확인
+1. `https://(내 주소)/api/health` → `{"ok":true,"db":"postgres",…}`.
+2. PC 브라우저에서 설계사, 휴대폰에서 고객으로 로그인 → 위쪽 상태 ‘실시간 연결됨’.
+3. 고객이 ‘내 정보·실적 입력’에서 값 저장 → 설계사 화면에 ‘고객 정보가 업데이트되었습니다’.
+4. 설계사가 새 안을 저장·‘고객에게 제시’ → 고객 화면 알림 → 선택 전 실행 기준 그대로, 선택 후 변경.
+5. 휴대폰 비행기 모드 → 해제 후 그 사이 변경이 나타나는지.
+6. Render → **Manual Deploy → Restart service** 후 다시 로그인해 값이 남아 있는지.
+
+## 무료 요금제 제한(2026-11-04 공식 문서 확인)
+
+**Render 무료 웹 서비스** ([공식 문서](https://render.com/docs/free), [요금](https://render.com/pricing.md))
+- 15분 동안 들어오는 요청이 없으면 잠들고, 다음 접속 때 깨어나는 데 약 1분 걸립니다. 열어 둔 실시간(SSE) 연결만으로는 깨어 있지 않습니다.
+- 작업공간당 월 750시간 무료(잠든 시간은 제외). 초과하면 그달 남은 기간 정지.
+- 디스크는 재배포·재시작·휴면 때 지워짐(그래서 데이터는 Neon에 저장). Shell 접속 없음. 언제든 재시작될 수 있음.
+- Hobby 작업공간 무료 전송량 월 5GB, 결제수단이 없으면 초과 시 그달 정지.
+
+**Neon 무료** ([공식 문서](https://neon.com/docs/introduction/plans))
+- 프로젝트당 저장 1GB, 컴퓨트 월 100 CU-시간, 5분간 사용이 없으면 일시 중지(다음 요청 때 자동 재개, 끌 수 없음).
+- 복원 가능 기간(instant restore) 최대 6시간. 한도를 넘으면 컴퓨트가 정지되거나 쓰기가 실패하지만 **데이터가 지워지지는 않습니다.**
+
+**항상 바로 응답하게 하려면(유료, 결제는 직접 확인 후 진행)**
+- Render 웹 서비스 유료 인스턴스(512MB, 1 CPU 미만): **월 7달러**. Hobby 작업공간 요금은 0달러.
+- Neon은 이 앱 규모(수백 MB 미만)면 무료로 충분합니다. 7일 복원·중지 끄기가 필요하면 Launch(사용량 과금: 컴퓨트 0.106달러/CU-시간, 저장 0.35달러/GB-월).
+- 예상: Render 월 7달러 + Neon 0달러 → 약 **월 7달러(약 1만 원)**. 금액은 바뀔 수 있으니 결제 전에 각 요금 페이지를 다시 확인하세요.
+
+## 백업과 복구
+- **Neon 자체 복원:** Neon 콘솔 → 프로젝트 → **Restore**에서 최근 6시간(무료) 안의 시점으로 되돌릴 수 있습니다. 실수 직후에만 쓸 수 있으니 정기 백업을 따로 받으세요.
+- **파일 백업(권장, 주 1회):** 내 PC에서 실행 창을 열고, 연결 문자열을 **그 창의 환경변수로만** 지정한 뒤 실행합니다.
+  - 윈도우 PowerShell: `$env:DATABASE_URL = Read-Host "Neon 연결 문자열"` (붙여 넣어도 화면·기록에 남지 않게 입력) → `npm run backup -- export backup-2026-11-04.json`
+  - 맥: `read -s DATABASE_URL; export DATABASE_URL` → `npm run backup -- export backup-2026-11-04.json`
+  - 백업 파일에는 고객 금융정보와 비밀번호 해시가 들어 있으니 GitHub에 올리지 말고 안전한 곳에 보관하세요(`.gitignore`가 `backup-*.json`을 제외).
+- **복구:** Neon에 새 프로젝트(빈 DB)를 만들고 그 연결 문자열로 `npm run backup -- restore backup-….json`. **계정이 하나라도 있는 DB에는 복구하지 않습니다**(기존 데이터 보호). 복구 후 Render의 `DATABASE_URL`을 새 DB로 바꿉니다.
+- `pg_dump`를 쓸 줄 안다면 `pg_dump "$DATABASE_URL" > backup.sql`도 가능합니다.
 
 ## 안드로이드 폰을 서버로 쓰기(Termux)
 
