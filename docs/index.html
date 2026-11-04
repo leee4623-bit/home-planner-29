@@ -1,95 +1,17 @@
 <!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>재무플래너 (시연판)</title>
-<meta name="description" content="설계사가 재무계획을 세우고 고객이 매월 실행을 확인하는 주거자금 설계 서비스">
-<meta name="theme-color" content="#0F2A4A">
-<meta name="color-scheme" content="light">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="재무플래너">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="css/styles.css">
-<script src="js/fonts.js"></script>
-</head>
-<body>
-<header class="masthead">
-  <div class="masthead-inner">
-    <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2563EB"/><path d="M8 16.5 16 9l8 7.5V24H8z" fill="#fff"/><rect x="13.5" y="18" width="5" height="6" fill="#0F2A4A"/></svg>
-      <div><p class="app-name">재무플래너</p></div>
-    </div>
-    <div class="masthead-actions">
-      <select id="clientSel" aria-label="고객 선택" hidden></select>
-      <span id="who" class="who"></span>
-      <button class="btn btn-ghost-light" id="installBtn" type="button">앱 설치</button>
-    </div>
-  </div>
-</header>
-<div id="updateBanner" class="update-banner" hidden><span>새 버전이 있습니다.</span><button class="btn btn-small" id="updateBtn" type="button">업데이트</button></div>
-
-<main id="loginView" class="login-wrap">
-  <section class="card login-card">
-    <h1>로그인</h1>
-    <p class="muted">고객은 자신의 정보와 실적만, 설계사는 서버에서 배정된 고객의 정보만 볼 수 있습니다.</p>
-    <form id="loginForm" class="stack" novalidate>
-      <div class="field"><label for="loginEmail">이메일</label><input id="loginEmail" type="email" autocomplete="username" required></div>
-      <div class="field"><label for="loginPw">비밀번호</label><input id="loginPw" type="password" autocomplete="current-password" required></div>
-      <p id="loginErr" class="field-error" hidden></p>
-      <button type="submit" class="btn">로그인</button>
-    </form>
-    <div class="demo-accounts" id="demoAccounts" hidden>
-      <p class="small"><strong>시연 모드 계정</strong> (가상 데이터 · 시연 비밀번호: 1234)</p>
-      <div class="btn-row">
-        <button type="button" class="btn btn-small btn-secondary" data-demo="client@demo.kr">고객</button>
-        <button type="button" class="btn btn-small btn-secondary" data-demo="planner@demo.kr">설계사</button>
-      </div>
-      <p class="muted small">버튼은 이메일만 채웁니다. 역할과 담당 고객은 서버에 저장된 계정 정보로만 정해집니다.</p>
-    </div>
-  </section>
-</main>
-
-<div id="appView" hidden>
-  <p id="demoBanner" class="demo-banner" hidden>시연 모드 · 가상 고객 데이터입니다. 실제 금융정보를 입력하지 마세요.</p>
-  <nav class="tabs-wrap"><div class="tabs" id="tabs" role="tablist" aria-label="화면 이동"></div><button type="button" class="btn btn-small btn-secondary logout" id="logoutBtn">로그아웃</button></nav>
-  <div id="syncBar" class="sync-bar" role="status" aria-live="polite" hidden></div>
-  <main id="main" class="main" role="tabpanel"></main>
-  <footer class="footer"><p>계산 기반 설명 — 모든 문장은 계산 엔진 결과로 만들며 외부 AI를 쓰지 않습니다. 금융상품 권유나 투자 조언이 아니며, 정책 조건은 확인일 기준이므로 가입·신청 전에 공식 기관에서 다시 확인하세요.</p></footer>
-</div>
-
-<div id="dialog" class="dialog-backdrop" hidden><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle"><h2 id="dialogTitle"></h2><div id="dialogBody"></div><div class="dialog-actions" id="dialogActions"></div></div></div>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-
-<script src="js/static.js"></script>
-<script src="js/data/policies.js"></script>
-<script src="js/engine/calc.js"></script>
-<script src="js/engine/clientData.js"></script>
-<script src="js/engine/products.js"></script>
-<script src="js/engine/analysis.js"></script>
-<script src="js/data/riskConfig.js"></script>
-<script src="js/engine/risk.js"></script>
-<script src="js/engine/strategies.js"></script>
-<script src="js/engine/monthly.js"></script>
-<script src="js/install.js"></script>
-<script src="js/ui/chart.js"></script>
-<script src="js/ui/components.js"></script>
-<script src="js/ui/sync.js"></script>
-<script src="js/ui/planForm.js"></script>
-<script src="js/ui/planner.js"></script>
-<script src="js/ui/client.js"></script>
-<script src="js/ui/features.js"></script>
-<script src="js/ui/offers.js"></script>
-<script src="js/ui/clientInput.js"></script>
-<script src="js/ui/productsView.js"></script>
-<script src="js/data/sampleCase.js"></script>
-<script src="js/linking.js"></script>
-<script src="js/mockApi.js"></script>
-<script src="js/ui/app.js"></script>
-</body>
-</html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>재무플래너</title><meta name="theme-color" content="#FFFFFF">
+<style>body{font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#fff;color:#0F2A4A;max-width:560px;margin:0 auto;padding:40px 20px;line-height:1.6}a.btn{display:inline-block;background:#1F5FBF;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:600}.muted{color:#5b6b80;font-size:14px}</style>
+</head><body>
+<h1>재무플래너</h1>
+<p>실제 서버로 이동합니다. 고객과 설계사가 각자의 휴대폰·PC에서 같은 데이터를 실시간으로 씁니다.</p>
+<p><a class="btn" id="go" href="https://home-planner-29.onrender.com/">재무플래너 열기</a></p>
+<p class="muted">무료 서버라 한동안 아무도 접속하지 않았다면 처음 열 때 1분 정도 걸릴 수 있습니다.<br>
+앱으로 설치하려면 이동한 주소에서 설치하세요(안드로이드 ⋮ → 앱 설치, 아이폰 공유 → 홈 화면에 추가). 이 주소에서 예전에 설치한 앱은 지우고 새 주소에서 다시 설치하세요.</p>
+<p class="muted">서버 없이 이 기기 안에서만 동작하는 <a href="demo/">오프라인 시연판</a>도 남겨 두었습니다(기기 간 동기화 없음).</p>
+<script>
+// 이 주소(github.io)에 예전 시연판 서비스 워커가 남아 있으면 정리(시연판 /demo/ 것은 유지)
+if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { if (r.scope.slice(-6) !== "/demo/") r.unregister(); }); });
+setTimeout(function () { location.replace('https://home-planner-29.onrender.com/'); }, 1500);
+</script>
+</body></html>

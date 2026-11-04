@@ -226,7 +226,7 @@ if (require.main === module) {
     });
     server.listen(port, () => {
       console.log('재무플래너 서버: http://localhost:' + port + ' (DB: ' + (db.kind === 'postgres' ? '공용 Postgres' : '내 PC 파일') + (demoMode ? ', 시연 모드' : '') + ')');
-      if (seeded) console.log('시연 계정이 생성되었습니다 → 설계사 ' + seeded.planner + ' / 고객 ' + seeded.client + ' / 비밀번호 ' + seeded.password);
+      if (seeded) console.log('시연 계정이 생성되었습니다 → 설계사 ' + seeded.planner + ' / 고객 ' + seeded.client + ' (비밀번호는 FP_DEMO_PASSWORD 값' + (process.env.FP_DEMO_PASSWORD ? '' : ', 기본 1234') + ' — 로그에 남기지 않음)');
     });
   }).catch((e) => { console.error('서버를 시작하지 못했습니다:', e.message); process.exit(1); });
 }

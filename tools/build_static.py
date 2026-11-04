@@ -2,8 +2,9 @@
 서버 대신 preview/mockApi.js(브라우저 안 시연 서버)를 넣고, 서비스 워커·설치는 그대로 동작합니다."""
 import os, re, shutil
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(R, 'docs')
-shutil.rmtree(OUT, ignore_errors=True)
+DOCS = os.path.join(R, 'docs')
+OUT = os.path.join(DOCS, 'demo')   # 서버 없는 시연판은 /demo/ 로, 첫 화면은 실제 서버로 안내
+shutil.rmtree(DOCS, ignore_errors=True)
 shutil.copytree(os.path.join(R, 'public'), OUT)
 for f in ('admin.html', 'js/admin.js'): os.remove(os.path.join(OUT, f))  # 관리 화면은 서버판 전용
 rd = lambda p: open(os.path.join(R, p), encoding='utf-8').read()
@@ -38,5 +39,24 @@ css = rd('public/css/styles.css') + '\n.preview-bar{background:var(--warn-bg);co
 wr('css/styles.css', css)
 sw = rd('public/sw.js').replace("var VERSION = '", "var VERSION = 'static-").replace("'./js/ui/app.js',", "'./js/static.js', './js/data/sampleCase.js', './js/linking.js', './js/mockApi.js', './js/ui/app.js',")
 wr('sw.js', sw)
-open(os.path.join(OUT, '.nojekyll'), 'w').close()
+open(os.path.join(DOCS, '.nojekyll'), 'w').close()
+SERVER = 'https://home-planner-29.onrender.com/'
+open(os.path.join(DOCS, 'index.html'), 'w', encoding='utf-8').write('''<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>재무플래너</title><meta name="theme-color" content="#FFFFFF">
+<style>body{font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#fff;color:#0F2A4A;max-width:560px;margin:0 auto;padding:40px 20px;line-height:1.6}a.btn{display:inline-block;background:#1F5FBF;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:600}.muted{color:#5b6b80;font-size:14px}</style>
+</head><body>
+<h1>재무플래너</h1>
+<p>실제 서버로 이동합니다. 고객과 설계사가 각자의 휴대폰·PC에서 같은 데이터를 실시간으로 씁니다.</p>
+<p><a class="btn" id="go" href="''' + SERVER + '''">재무플래너 열기</a></p>
+<p class="muted">무료 서버라 한동안 아무도 접속하지 않았다면 처음 열 때 1분 정도 걸릴 수 있습니다.<br>
+앱으로 설치하려면 이동한 주소에서 설치하세요(안드로이드 ⋮ → 앱 설치, 아이폰 공유 → 홈 화면에 추가). 이 주소에서 예전에 설치한 앱은 지우고 새 주소에서 다시 설치하세요.</p>
+<p class="muted">서버 없이 이 기기 안에서만 동작하는 <a href="demo/">오프라인 시연판</a>도 남겨 두었습니다(기기 간 동기화 없음).</p>
+<script>
+// 이 주소(github.io)에 예전 시연판 서비스 워커가 남아 있으면 정리(시연판 /demo/ 것은 유지)
+if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { if (r.scope.slice(-6) !== "/demo/") r.unregister(); }); });
+setTimeout(function () { location.replace(''' + repr(SERVER) + '''); }, 1500);
+</script>
+</body></html>
+''')
 print('docs/ 생성 완료')
