@@ -7,11 +7,13 @@
   function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
   // 서버 요청 (쿠키 세션 + CSRF 헤더)
-  function api(method, path, body) {
-    return fetch(path, { method: method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-FP-Request': '1' }, body: body ? JSON.stringify(body) : undefined })
+  // headers: 추가 헤더(예: Idempotency-Key — 재시도해도 한 번만 처리)
+  function api(method, path, body, headers) {
+    var h = { 'Content-Type': 'application/json', 'X-FP-Request': '1' }; if (headers) Object.keys(headers).forEach(function (k) { h[k] = headers[k]; });
+    return fetch(path, { method: method, credentials: 'same-origin', headers: h, body: body ? JSON.stringify(body) : undefined })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) { var e = new Error(j.error || ('요청 실패 (' + r.status + ')')); e.status = r.status; e.code = j.code; throw e; }
+          if (!r.ok) { var e = new Error(j.error || ('요청 실패 (' + r.status + ')')); e.status = r.status; e.code = j.code; e.body = j; throw e; }
           return j;
         });
       }, function () { var e = new Error('서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.'); e.status = 0; throw e; });

@@ -20,31 +20,47 @@
     U.api('POST', '/api/login', { email: em, password: pw }).then(function () { $('loginPw').value = ''; return start(); }).catch(function (x) { out.textContent = x.message; out.hidden = false; });
   });
   doc.querySelectorAll('[data-demo]').forEach(function (b) { b.addEventListener('click', function () { $('loginEmail').value = b.dataset.demo; $('loginPw').focus(); }); });
-  $('logoutBtn').addEventListener('click', function () { U.api('POST', '/api/logout').then(function () { location.hash = ''; location.reload(); }, err); });
+  $('logoutBtn').addEventListener('click', function () {
+    var n = FP.ClientInput && S.user && S.user.role === 'client' ? FP.ClientInput.dirtyCount(S) : 0;
+    if (n && !root.confirm('저장하지 않은 변경 ' + n + '개가 있습니다. 로그아웃하면 사라집니다. 계속할까요?')) return;
+    FP.Sync.stop(); U.api('POST', '/api/logout').then(function () { location.hash = ''; location.reload(); }, err);
+  });
+
+  // 로그인 화면: 시연 모드일 때만 시연 계정 버튼(고객·설계사) 표시. 역할은 서버 계정에 저장된 값으로만 정해짐
+  U.api('GET', '/api/config').then(function (c) { S.config = c; var d = $('demoAccounts'); if (d) d.hidden = !c.demo; }, function () { /* 서버 연결 실패는 로그인 시 안내 */ });
 
   function start() {
     return U.api('GET', '/api/me').then(function (m) {
-      S.user = m.user; show('appView');
+      S.user = m.user; S.demoMode = m.demoMode; show('appView');
       $('who').textContent = m.user.name + ' · ' + (m.user.role === 'planner' ? '설계사' : '고객');
-      return U.api('GET', '/api/clients');
-    }).then(function (r) {
+      $('demoBanner').hidden = !(m.user.demo || m.demoMode);
+      return U.api('GET', '/api/sync?latestOnly=1').catch(function () { return { latest: 0 }; });
+    }).then(function (sy) { FP.Sync.start(sy.latest || 0); return refreshClients(); });
+  }
+  function refreshClients() {
+    return U.api('GET', '/api/clients').then(function (r) {
       S.clients = r.clients;
       var sel = $('clientSel');
-      sel.hidden = S.user.role !== 'planner';
+      sel.hidden = S.user.role !== 'planner' || !S.clients.length;
       sel.innerHTML = S.clients.map(function (c) { return '<option value="' + c.id + '">' + U.esc(c.profile.name) + '</option>'; }).join('');
-      if (!S.clients.length) { $('main').innerHTML = '<section class="card"><p>배정된 고객이 없습니다. 고객이 설계사에게 조회 권한을 부여해야 합니다.</p></section>'; return; }
-      return loadClient(S.clients[0].id);
+      if (!S.clients.length) { S.client = null; $('tabs').innerHTML = ''; $('main').innerHTML = '<section class="card empty-state"><h2>현재 배정된 고객이 없습니다</h2><p class="muted">고객 배정은 서버 관리자만 할 수 있습니다. 배정되면 이 화면에 바로 나타납니다.</p></section>'; return; }
+      var keep = S.client && S.clients.some(function (c) { return c.id === S.client.id; }) ? S.client.id : S.clients[0].id;
+      sel.value = keep;
+      return loadClient(keep);
     });
   }
 
-  function loadClient(id) {
+  function loadClient(id, keep) {
+    var prev = S.client && S.client.id;
     S.client = S.clients.filter(function (c) { return c.id === Number(id); })[0];
+    if (prev !== S.client.id) { S.ui.inp = null; S.ui.updates = null; S.ui.history = null; S.ui.basisChanged = null; S.prodData = null; S.ui.prod = null; S.chat = null; }
     var base = '/api/clients/' + S.client.id;
-    return Promise.all([U.api('GET', base + '/plans'), U.api('GET', base + '/records'), U.api('GET', base + '/settings'), U.api('GET', base + '/transactions'), U.api('GET', base + '/accounts'), U.api('GET', base + '/extra')]).then(function (r) {
-      S.x = r[5];
+    return Promise.all([U.api('GET', base + '/plans'), U.api('GET', base + '/records'), U.api('GET', base + '/settings'), U.api('GET', base + '/transactions'), U.api('GET', base + '/accounts'), U.api('GET', base + '/extra'), U.api('GET', base + '/data')]).then(function (r) {
+      S.x = r[5]; S.cd = r[6];
+      if (S.ui.historyOpen) U.api('GET', base + '/history').then(function (h) { S.ui.history = h.history; if (S.ui.tab === 'clientInfo') render(); }, function () {});
       S.plans = r[0].plans; S.records = r[1].records.filter(function (x) { return !x.voidedAt; }).map(function (x) { x.status = 'confirmed'; return x; }); S.allRecords = r[1].records;
       S.settings = r[2].settings; S.txs = r[3].transactions; S.sync = r[3].sync; S.accounts = r[4].accounts;
-      S.ui.draft = null; S.ui.cutApplied = null;
+      if (!keep) { S.ui.draft = null; S.ui.cutApplied = null; } // keep: 불러오는 사이 만든 초안도 그대로 둠
       if (FP.Features) FP.Features.onLoad(S);
       var tabs = tabsFor(); var h = location.hash.slice(1);
       S.ui.tab = tabs.some(function (t) { return t[0] === h; }) ? h : (S.ui.tab && tabs.some(function (t) { return t[0] === S.ui.tab; }) ? S.ui.tab : tabs[0][0]);
@@ -53,7 +69,8 @@
   }
   FP.reload = function () { return reload(true); };
   FP.rerender = function () { renderTabs(); render(); };
-  function reload(keepUi) { var ui = S.ui; return loadClient(S.client.id).then(function () { if (keepUi) { S.ui.draft = ui.draft; S.ui.cutApplied = ui.cutApplied; render(); } }); }
+  // 다시 불러와도 작성 중인 초안은 유지(조용히 덮어쓰지 않음)
+  function reload(keepUi) { if (!S.client) return Promise.resolve(); return loadClient(S.client.id, !!keepUi); }
 
   function tabsFor() { return S.user.role === 'planner' ? FP.Planner.TABS : FP.Client.TABS; }
   function renderTabs() {
@@ -63,13 +80,49 @@
   function render() {
     var f = doc.activeElement, fid = f && f.id, sel = null; try { sel = f && f.selectionStart; } catch (e) { sel = null; }
     var V = S.user.role === 'planner' ? FP.Planner : FP.Client;
-    try { $('main').innerHTML = V[S.ui.tab](S); }
+    try { $('main').innerHTML = updatesNote() + V[S.ui.tab](S); }
     catch (e) { console.error(e); $('main').innerHTML = '<section class="card"><p class="is-bad">화면을 그리는 중 오류가 발생했습니다: ' + U.esc(e.message) + '</p></section>'; }
     if (S.ui.tab === 'path') FP.Planner.drawPath(S);
-    if (S.ui.tab === 'plan' && S.user.role === 'client') FP.Client.drawPlan(S);
+    if (S.ui.tab === 'path' && S.user.role === 'client') FP.Client.drawPlan(S);
+    var tw = doc.querySelector('.tabs-wrap'); if (tw) doc.documentElement.style.setProperty('--tabs-h', tw.offsetHeight + 'px');
     if (FP.Features && FP.Features.afterRender) FP.Features.afterRender(S);
     if (fid) { var g = $(fid); if (g && g !== f) { g.focus(); try { if (sel !== null) g.setSelectionRange(sel, sel); } catch (e) { /* 무시 */ } } }
   }
+  // 설계사: 고객이 저장한 변경(서버 저장 확인 후 실시간 전달) 요약
+  function updatesNote() {
+    var u = S.user.role === 'planner' && S.ui.updates;
+    if (!u || !u.length) return '';
+    return '<section class="card update-note" role="status"><div class="card-head wrap"><h2>고객 정보가 업데이트되었습니다</h2><button type="button" class="btn btn-small btn-secondary" data-action="dismissUpdates">확인</button></div><ul class="plain-list small">' + u.map(function (x) {
+      return '<li><span class="muted">' + FP.Sync.time(x.at) + '</span> ' + U.esc(x.text || '') + (x.items && x.items.length ? ' — ' + x.items.map(function (it) { return '<strong>' + U.esc(it.label) + '</strong> ' + U.esc(it.from ? it.from + ' → ' : '') + U.esc(it.to); }).join(', ') : '') + '</li>';
+    }).join('') + '</ul><p class="muted small">분석 결과는 최신 정보로 다시 계산되어 표시됩니다. 실행 기준 계획은 설계사가 새 안을 제시하고 고객이 선택해야 바뀝니다.</p></section>';
+  }
+
+  // 실시간 변경 받기
+  FP.Sync.on(function (m) {
+    if (!S.user) return;
+    if (m.type === 'revoked') { if (m.data.all) { U.toast('로그인이 만료되었습니다. 다시 로그인해 주세요.', true); FP.Sync.stop(); S.user = null; show('loginView'); return; } U.toast('이 고객에 대한 접근 권한이 해제되었습니다.', true); return refreshClients(); }
+    if (m.type === 'assigned') { U.toast('새 고객이 배정되었습니다.'); return refreshClients(); }
+    var ev = m.data; if (!S.client) return;
+    if (ev.clientId !== S.client.id) { if (S.user.role === 'planner') { var c = S.clients.filter(function (x) { return x.id === ev.clientId; })[0]; if (c && ev.actorRole === 'client') U.toast(c.profile.name + ' 고객 정보가 업데이트되었습니다.'); } return; }
+    var own = ev.entity === 'client_data' && S.ui.ownVersion === ev.version;
+    var sum = (ev.items || []).slice(0, 3).map(function (it) { return it.label + ' ' + it.to; }).join(', ');
+    if (S.user.role === 'planner' && ev.actorRole === 'client') {
+      S.ui.updates = [{ at: ev.at, text: ev.text, items: ev.items, entity: ev.entity }].concat(S.ui.updates || []).slice(0, 6);
+      if (S.ui.draft && ev.entity === 'client_data') S.ui.basisChanged = (S.ui.basisChanged || []).concat(ev.items || []);
+      U.toast('고객 정보가 업데이트되었습니다' + (sum ? ': ' + sum : ''));
+      render(); // 변경 요약은 바로 표시, 분석 결과는 이어서 다시 불러와 갱신
+    } else if (S.user.role === 'client' && ev.actorRole !== 'client') {
+      if (ev.entity === 'offer' || ev.entity === 'strategy') U.toast('설계사가 새 제안을 보냈습니다. ‘A/B/C안·제안’에서 확인해 주세요.');
+      else if (ev.entity === 'baseline') U.toast('실행 기준 계획이 바뀌었습니다: ' + (ev.text || ''));
+      else if (ev.entity === 'evaluation') U.toast('새 알림이 있습니다: ' + (ev.text || ''));
+    } else if (S.user.role === 'client' && ev.entity === 'client_data' && !own && S.ui.inp) {
+      // 다른 기기에서 같은 항목을 저장함 → 이 화면의 저장 전 입력과 겹치면 표시(덮어쓰지 않음)
+      (ev.items || []).forEach(function (it) { if (Object.prototype.hasOwnProperty.call(S.ui.inp.dirty, it.path) || S.ui.inp.lists[it.path] !== undefined) S.ui.inp.conflicts[it.path] = { path: it.path, label: it.label, current: it.to }; });
+      U.toast('다른 기기에서 내 정보가 저장되었습니다' + (sum ? ': ' + sum : ''));
+    }
+    if (!own) FP.Sync.reloadSoon();
+  });
+
   function setTab(t) { S.ui.tab = t; try { history.replaceState(null, '', '#' + t); } catch (e) { /* 무시 */ } renderTabs(); render(); root.scrollTo(0, 0); }
 
   // ---------- 이벤트 ----------
@@ -87,12 +140,17 @@
     if (ds.verify) { S.ui.verifyPlan = ds.verify; return render(); }
     if (ds.addshock) { var ty = A.SHOCK_TYPES.filter(function (x) { return x.type === ds.addshock; })[0]; S.ui.shocks.push(Object.assign({ type: ty.type }, ty.def)); return render(); }
     if (ds.delshock !== undefined) { S.ui.shocks.splice(Number(ds.delshock), 1); return render(); }
-    if (ds.edit) { var p = S.plans.filter(function (x) { return x.id === Number(ds.edit); })[0]; S.ui.draft = { data: JSON.parse(JSON.stringify(p.data)), kind: p.kind === 'before' ? 'before' : 'after', fromLabel: FP.Planner.vLabel(p), label: '', note: '' }; render(); var dr = doc.querySelector('.draft'); if (dr) dr.scrollIntoView(); return; }
+    if (ds.edit) { var p = S.plans.filter(function (x) { return x.id === Number(ds.edit); })[0]; S.ui.basisChanged = null; S.ui.draft = { data: JSON.parse(JSON.stringify(p.data)), kind: p.kind === 'before' ? 'before' : 'after', fromLabel: FP.Planner.vLabel(p), label: '', note: '', dataVersion: S.cd ? S.cd.version : null }; render(); var dr = doc.querySelector('.draft'); if (dr) dr.scrollIntoView(); return; }
     if (ds.addlist) { var d = S.ui.draft.data; d[ds.addlist] = d[ds.addlist] || []; d[ds.addlist].push(PF.LISTS[ds.addlist].blank()); return render(); }
     if (ds.dellist) { S.ui.draft.data[ds.dellist].splice(Number(ds.idx), 1); return render(); }
     if (ds.txconfirm) return confirmTx(ds.txconfirm, false);
     switch (ds.action) {
       case 'saveDraft': return saveDraft();
+      case 'dismissUpdates': S.ui.updates = null; return render();
+      case 'loadHistory': S.ui.historyOpen = true; return U.api('GET', '/api/clients/' + S.client.id + '/history').then(function (h) { S.ui.history = h.history; render(); }, err);
+      case 'draftFromClient': { var bp = FP.Client.myPlan(S); S.ui.basisChanged = null; S.ui.draft = { data: FP.ClientData.applyToPlan(bp.data, S.cd.data, { kind: bp.kind }), kind: 'after', fromLabel: FP.Planner.vLabel(bp) + ' + 고객 정보 v' + S.cd.version, label: '고객 최신 정보 반영', note: '고객 정보 v' + S.cd.version + ' 반영', dataVersion: S.cd.version }; return setTab('edit'); }
+      case 'rebaseDraft': return U.api('GET', '/api/clients/' + S.client.id + '/data').then(function (cd) { S.cd = cd; var dd = S.ui.draft; dd.data = FP.ClientData.applyToPlan(dd.data, cd.data, { kind: dd.kind }); dd.dataVersion = cd.version; S.ui.basisChanged = null; U.toast('고객 최신 정보(v' + cd.version + ')로 다시 계산했습니다. 직접 바꾼 다른 값은 그대로입니다.'); render(); }, err);
+      case 'keepDraft': S.ui.basisChanged = null; return render();
       case 'cancelDraft': S.ui.draft = null; return render();
       case 'applyCut': return applyCut();
       case 'csv': { var ok = U.download('계산표-' + S.client.profile.name + '-' + (S.ui.verifyPlan === 'before' ? '설계전' : '설계후') + '.csv', FP.Planner.csv(S), 'text/csv;charset=utf-8'); if (ok) return U.toast('CSV를 내려받았습니다.');
@@ -162,9 +220,15 @@
   function saveDraft() {
     var d = S.ui.draft, out = $('draftError');
     d.label = $('draftLabel').value; d.note = $('draftNote').value; d.kind = $('draftKind').value;
-    U.api('POST', '/api/clients/' + S.client.id + '/plans', { kind: d.kind, label: d.label || '수정안', note: d.note, data: d.data })
-      .then(function (r) { U.toast((d.kind === 'before' ? '설계 전' : '설계 후') + ' v' + r.version + '로 저장했습니다. 이전 버전은 그대로 남아 있습니다.'); S.ui.draft = null; return reload(); })
-      .catch(function (x) { out.textContent = x.message; out.hidden = false; });
+    var send = function (ack) {
+      return U.api('POST', '/api/clients/' + S.client.id + '/plans', { kind: d.kind, label: d.label || '수정안', note: d.note, data: d.data, dataVersion: d.dataVersion, acknowledgeStale: ack })
+        .then(function (r) { U.toast((d.kind === 'before' ? '설계 전' : '설계 후') + ' v' + r.version + '(설계사 초안)로 저장했습니다. 고객에게 보이려면 ‘고객에게 제시’를 누르세요.'); S.ui.draft = null; S.ui.basisChanged = null; return reload(); })
+        .catch(function (x) {
+          if (x.code === 'staleBasis') return U.dialog({ title: '분석 기준 정보가 변경되었습니다', body: '<p>이 초안을 만든 뒤 고객이 정보를 저장했습니다. 조용히 덮어쓰지 않도록 확인을 받습니다.</p><ul class="plain-list small">' + (x.body.items || []).map(function (it) { return '<li>' + U.esc(it.label) + ': ' + U.esc(it.from || '') + ' → ' + U.esc(it.to) + '</li>'; }).join('') + '</ul>', actions: [{ text: '최신 정보로 다시 계산', cls: 'btn-primary', onClick: function () { d.data = FP.ClientData.applyToPlan(d.data, S.cd.data, { kind: d.kind }); d.dataVersion = S.cd.version; S.ui.basisChanged = null; render(); U.toast('다시 계산했습니다. 확인 후 저장해 주세요.'); } }, { text: '확인했고 그대로 저장', onClick: function () { send(true); } }, { text: '취소' }] });
+          out.textContent = x.message; out.hidden = false;
+        });
+    };
+    send(false);
   }
 
   function applyCut() {

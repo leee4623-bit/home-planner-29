@@ -37,26 +37,28 @@
 <main id="loginView" class="login-wrap">
   <section class="card login-card">
     <h1>로그인</h1>
-    <p class="muted">설계사는 배정된 고객의 계획을, 고객은 자신의 계획과 실행 기록만 볼 수 있습니다.</p>
+    <p class="muted">고객은 자신의 정보와 실적만, 설계사는 서버에서 배정된 고객의 정보만 볼 수 있습니다.</p>
     <form id="loginForm" class="stack" novalidate>
       <div class="field"><label for="loginEmail">이메일</label><input id="loginEmail" type="email" autocomplete="username" required></div>
       <div class="field"><label for="loginPw">비밀번호</label><input id="loginPw" type="password" autocomplete="current-password" required></div>
       <p id="loginErr" class="field-error" hidden></p>
       <button type="submit" class="btn">로그인</button>
     </form>
-    <div class="demo-accounts">
-      <p class="small"><strong>공모전 시연 계정</strong> (시연 비밀번호: 1234)</p>
+    <div class="demo-accounts" id="demoAccounts" hidden>
+      <p class="small"><strong>시연 모드 계정</strong> (가상 데이터 · 시연 비밀번호: 1234)</p>
       <div class="btn-row">
-        <button type="button" class="btn btn-small btn-secondary" data-demo="planner@demo.kr">설계사</button>
         <button type="button" class="btn btn-small btn-secondary" data-demo="client@demo.kr">고객</button>
-        <button type="button" class="btn btn-small btn-secondary" data-demo="planner2@demo.kr">미배정 설계사</button>
+        <button type="button" class="btn btn-small btn-secondary" data-demo="planner@demo.kr">설계사</button>
       </div>
+      <p class="muted small">버튼은 이메일만 채웁니다. 역할과 담당 고객은 서버에 저장된 계정 정보로만 정해집니다.</p>
     </div>
   </section>
 </main>
 
 <div id="appView" hidden>
+  <p id="demoBanner" class="demo-banner" hidden>시연 모드 · 가상 고객 데이터입니다. 실제 금융정보를 입력하지 마세요.</p>
   <nav class="tabs-wrap"><div class="tabs" id="tabs" role="tablist" aria-label="화면 이동"></div><button type="button" class="btn btn-small btn-secondary logout" id="logoutBtn">로그아웃</button></nav>
+  <div id="syncBar" class="sync-bar" role="status" aria-live="polite" hidden></div>
   <main id="main" class="main" role="tabpanel"></main>
   <footer class="footer"><p>계산 기반 설명 — 모든 문장은 계산 엔진 결과로 만들며 외부 AI를 쓰지 않습니다. 금융상품 권유나 투자 조언이 아니며, 정책 조건은 확인일 기준이므로 가입·신청 전에 공식 기관에서 다시 확인하세요.</p></footer>
 </div>
@@ -67,6 +69,8 @@
 <script src="js/static.js"></script>
 <script src="js/data/policies.js"></script>
 <script src="js/engine/calc.js"></script>
+<script src="js/engine/clientData.js"></script>
+<script src="js/engine/products.js"></script>
 <script src="js/engine/analysis.js"></script>
 <script src="js/data/riskConfig.js"></script>
 <script src="js/engine/risk.js"></script>
@@ -75,10 +79,14 @@
 <script src="js/install.js"></script>
 <script src="js/ui/chart.js"></script>
 <script src="js/ui/components.js"></script>
+<script src="js/ui/sync.js"></script>
 <script src="js/ui/planForm.js"></script>
 <script src="js/ui/planner.js"></script>
 <script src="js/ui/client.js"></script>
 <script src="js/ui/features.js"></script>
+<script src="js/ui/offers.js"></script>
+<script src="js/ui/clientInput.js"></script>
+<script src="js/ui/productsView.js"></script>
 <script src="js/data/sampleCase.js"></script>
 <script src="js/linking.js"></script>
 <script src="js/mockApi.js"></script>

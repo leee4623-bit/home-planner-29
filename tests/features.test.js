@@ -11,8 +11,8 @@ const Strat = require('../public/js/engine/strategies.js');
 const M = require('../public/js/engine/monthly.js');
 const Calc = require('../public/js/engine/calc.js');
 const S = require('../public/js/data/sampleCase.js');
-const { createServer } = require('../server/server.js');
-const { open } = require('../server/db.js');
+const { start } = require('./helpers');
+const admin = require('../server/admin.js');
 const jobs = require('../server/jobs.js');
 const push = require('../server/push.js');
 
@@ -93,13 +93,11 @@ const NOW = new Date(2026, 10, 3, 14, 0);
   });
 
   // ---------- 서버 ----------
-  const { server, db } = createServer({ db: open(':memory:'), password: 'pw-test', secureCookie: false, scheduler: false });
-  await new Promise((r) => server.listen(0, r));
-  const base = 'http://127.0.0.1:' + server.address().port;
-  const login = async (email) => { const r = await fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FP-Request': '1' }, body: JSON.stringify({ email, password: 'pw-test' }) }); return r.headers.get('set-cookie').split(';')[0]; };
-  const api = (ck) => async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'Content-Type': 'application/json', 'X-FP-Request': '1', Cookie: ck }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, body: await r.json() }; };
-  const P = api(await login('planner@demo.kr')), Cl = api(await login('client@demo.kr')), P2 = api(await login('planner2@demo.kr'));
-  const cid = 1;
+  const app = await start({ password: 'pw-test' });
+  const { db, api, login } = app;
+  await admin.addUser(db, { email: 'free@test.kr', name: '미배정(시험)', role: 'planner', password: 'free-pass-123' });
+  const P = api(await login('planner@demo.kr')), Cl = api(await login('client@demo.kr')), P2 = api(await login('free@test.kr', 'free-pass-123'));
+  const cid = 1, CU = 2; // 고객 1의 사용자 번호
 
   await test('기존 결과 확인: 금융기관 결과와 앱 결과를 따로 저장, 변화가 있으면 재진단 권유', async () => {
     const x = (await Cl('GET', '/api/clients/1/extra')).body;
@@ -141,7 +139,7 @@ const NOW = new Date(2026, 10, 3, 14, 0);
 
   await test('수정안은 확인 전에 기준 계획을 바꾸지 않음', async () => {
     const bl0 = (await Cl('GET', '/api/clients/1/extra')).body.baselineId;
-    jobs.evaluate(db, cid, { now: NOW });
+    await jobs.evaluate(db, cid, { now: NOW });
     const x = (await Cl('GET', '/api/clients/1/extra')).body;
     assert.ok(x.revisions.some((r) => r.status === 'pending'), '확인 대기 수정안이 있어야 함');
     assert.strictEqual(x.baselineId, bl0);
@@ -149,14 +147,14 @@ const NOW = new Date(2026, 10, 3, 14, 0);
   });
 
   await test('알림 금액 = 대시보드 계산 결과, 같은 상황 중복 알림 없음', async () => {
-    const ctx = jobs.context(db, cid, NOW), rc = M.recalc(ctx);
-    const n = db.prepare("SELECT * FROM notifications WHERE client_id = 1 AND type = 'overspend'").get();
+    const ctx = await jobs.context(db, cid, NOW), rc = M.recalc(ctx);
+    const n = (await db.get("SELECT * FROM notifications WHERE client_id = 1 AND type = 'overspend'"));
     assert.ok(n, '초과 지출 알림 생성');
     assert.ok(n.fact.includes(Math.round(rc.lastFinal.overspend / 10000).toLocaleString('ko-KR') + '만원'));
     if (rc.requiredCut > 0) assert.ok(n.impact.includes(Math.round(rc.requiredCut / 10000).toLocaleString('ko-KR') + '만원'), n.impact);
-    const cnt = db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n;
-    jobs.evaluate(db, cid, { now: NOW }); jobs.evaluate(db, cid, { now: NOW });
-    assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, cnt);
+    const cnt = (await db.get('SELECT COUNT(*) AS n FROM notifications')).n;
+    await jobs.evaluate(db, cid, { now: NOW }); await jobs.evaluate(db, cid, { now: NOW });
+    assert.strictEqual((await db.get('SELECT COUNT(*) AS n FROM notifications')).n, cnt);
   });
 
   await test('알림 읽음 처리·설계사 문의·수신 거부', async () => {
@@ -168,49 +166,50 @@ const NOW = new Date(2026, 10, 3, 14, 0);
     // 수신 거부: 새 상황(비상금 부족)을 만들되 해당 유형을 끈 상태
     await Cl('PUT', '/api/clients/1/notif-settings', { settings: { types: { emergencyLow: false }, quietStart: '22:00', quietEnd: '08:00', push: false } });
     await Cl('PUT', '/api/clients/1/settings', { settings: { dueDay: 25, graceDays: 3, cumTolerancePct: 10, budgetTolerancePct: 10, emergencyMinMonths: 24, staleDays: 7 } });
-    jobs.evaluate(db, cid, { now: NOW });
-    assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE type = 'emergencyLow'").get().n, 0);
+    await jobs.evaluate(db, cid, { now: NOW });
+    assert.strictEqual((await db.get("SELECT COUNT(*) AS n FROM notifications WHERE type = 'emergencyLow'")).n, 0);
     await Cl('PUT', '/api/clients/1/notif-settings', { settings: { types: {}, quietStart: '22:00', quietEnd: '08:00', push: false } });
-    jobs.evaluate(db, cid, { now: NOW });
-    assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE type = 'emergencyLow'").get().n, 1, '다시 켜면 생성');
+    await jobs.evaluate(db, cid, { now: NOW });
+    assert.strictEqual((await db.get("SELECT COUNT(*) AS n FROM notifications WHERE type = 'emergencyLow'")).n, 1, '다시 켜면 생성');
     await Cl('PUT', '/api/clients/1/settings', { settings: { dueDay: 25, graceDays: 3, cumTolerancePct: 10, budgetTolerancePct: 10, emergencyMinMonths: 3, staleDays: 7 } });
   });
 
   await test('자동 적용은 동의한 범위에서만 (한도 초과 시 확인 대기, 범위 안이면 새 버전)', async () => {
     // 새 상황: 기준 계획 기준으로 다시 수정안이 생기도록 이전 수정안 정리
-    const bl = jobs.baselinePlan(db, cid);
-    db.prepare('DELETE FROM revisions WHERE client_id = 1').run();
+    const bl = (await jobs.baselinePlan(db, cid));
+    (await db.run('DELETE FROM revisions WHERE client_id = 1'));
     await Cl('PUT', '/api/clients/1/consent', { consent: { enabled: true, monthlyLimit: 10000, floor: 1200000 } });
-    db.prepare('INSERT OR IGNORE INTO records (client_id, month, category, amount, source, created_by, created_at) VALUES (1, ?, ?, ?, ?, 3, ?)').run('2026-10', 'expense:optional', 400000, 'manual', new Date().toISOString());
-    jobs.evaluate(db, cid, { now: NOW });
-    let rv = db.prepare("SELECT * FROM revisions WHERE client_id = 1 AND kind = 'overspend'").get();
+    (await db.run('INSERT OR IGNORE INTO records (client_id, month, category, amount, source, created_by, created_at) VALUES (1, ?, ?, ?, ?, 2, ?)', '2026-10', 'expense:optional', 400000, 'manual', new Date().toISOString()));
+    await jobs.evaluate(db, cid, { now: NOW });
+    let rv = (await db.get("SELECT * FROM revisions WHERE client_id = 1 AND kind = 'overspend'"));
     assert.ok(rv, '수정안 생성'); assert.strictEqual(rv.status, 'pending', '한도(1만원) 초과 → 자동 적용 안 함');
-    assert.strictEqual(jobs.baselinePlan(db, cid).id, bl.id);
-    db.prepare('DELETE FROM revisions WHERE client_id = 1').run();
+    assert.strictEqual((await jobs.baselinePlan(db, cid)).id, bl.id);
+    (await db.run('DELETE FROM revisions WHERE client_id = 1'));
     await Cl('PUT', '/api/clients/1/consent', { consent: { enabled: true, monthlyLimit: 1000000, floor: 1200000 } });
-    const nPlans = db.prepare('SELECT COUNT(*) AS n FROM plans WHERE client_id = 1').get().n;
-    jobs.evaluate(db, cid, { now: NOW });
-    rv = db.prepare("SELECT * FROM revisions WHERE client_id = 1 AND kind = 'overspend'").get();
-    assert.strictEqual(rv.status, 'auto'); assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM plans WHERE client_id = 1').get().n, nPlans + 1);
-    const nb = jobs.baselinePlan(db, cid); assert.notStrictEqual(nb.id, bl.id);
+    const nPlans = (await db.get('SELECT COUNT(*) AS n FROM plans WHERE client_id = 1')).n;
+    await jobs.evaluate(db, cid, { now: NOW });
+    rv = (await db.get("SELECT * FROM revisions WHERE client_id = 1 AND kind = 'overspend'"));
+    assert.strictEqual(rv.status, 'auto'); assert.strictEqual((await db.get('SELECT COUNT(*) AS n FROM plans WHERE client_id = 1')).n, nPlans + 1);
+    const nb = (await jobs.baselinePlan(db, cid)); assert.notStrictEqual(nb.id, bl.id);
     assert.strictEqual(nb.data.basis.moveMonth, bl.data.basis.moveMonth, '목표일은 자동으로 바뀌지 않음');
     assert.strictEqual(JSON.stringify(nb.data.products), JSON.stringify(bl.data.products), '상품 해지·추가 없음');
     assert.strictEqual(nb.data.plan.investShare, bl.data.plan.investShare, '위험 확대 없음');
     const cut = nb.data.plan.cuts[nb.data.plan.cuts.length - 1].amount;
     assert.ok(nb.data.expenses.essential - Math.max(0, cut - nb.data.expenses.optional) >= 1200000, '필수생활비 하한');
-    assert.deepStrictEqual(JSON.parse(db.prepare('SELECT data FROM plans WHERE id = ?').get(bl.id).data), bl.data, '이전 버전 보존');
+    assert.deepStrictEqual(JSON.parse((await db.get('SELECT data FROM plans WHERE id = ?', bl.id)).data), bl.data, '이전 버전 보존');
     await Cl('PUT', '/api/clients/1/consent', { consent: { enabled: false, monthlyLimit: 100000, floor: 0 } });
   });
 
-  await test('수동 적용: 고객 확인 후에만, 이미 적용한 수정안은 다시 적용 불가', async () => {
-    db.prepare('DELETE FROM revisions WHERE client_id = 1').run();
-    db.prepare("INSERT INTO records (client_id, month, category, amount, source, created_by, created_at) VALUES (1, '2026-10', 'expense:optional', 300000, 'manual', 3, ?)").run(new Date().toISOString());
-    jobs.evaluate(db, cid, { now: NOW });
-    const rv = db.prepare("SELECT * FROM revisions WHERE client_id = 1 AND status = 'pending'").get(); assert.ok(rv);
+  await test('수동 적용: 고객 확인 후에만, 이미 적용한 수정안은 다시 적용하지 않음(재시도 안전)', async () => {
+    (await db.run('DELETE FROM revisions WHERE client_id = 1'));
+    (await db.run("INSERT INTO records (client_id, month, category, amount, source, created_by, created_at) VALUES (1, '2026-10', 'expense:optional', 300000, 'manual', 2, ?)", new Date().toISOString()));
+    await jobs.evaluate(db, cid, { now: NOW });
+    const rv = (await db.get("SELECT * FROM revisions WHERE client_id = 1 AND status = 'pending'")); assert.ok(rv);
     assert.strictEqual((await P('POST', '/api/clients/1/revisions/' + rv.id + '/apply')).status, 403, '설계사는 적용 불가');
     const r = await Cl('POST', '/api/clients/1/revisions/' + rv.id + '/apply'); assert.strictEqual(r.status, 200);
-    assert.strictEqual(jobs.baselinePlan(db, cid).id, r.body.planId);
-    assert.strictEqual((await Cl('POST', '/api/clients/1/revisions/' + rv.id + '/apply')).status, 409);
+    assert.strictEqual((await jobs.baselinePlan(db, cid)).id, r.body.planId);
+    const again = await Cl('POST', '/api/clients/1/revisions/' + rv.id + '/apply'); assert.strictEqual(again.status, 200); assert.ok(again.body.already, '재시도는 다시 적용하지 않음');
+    assert.strictEqual((await jobs.baselinePlan(db, cid)).id, r.body.planId, '실행 기준 그대로');
   });
 
   await test('월 확정: 미확인 거래·결제 전 예정이 있으면 거부', async () => {
@@ -230,18 +229,18 @@ const NOW = new Date(2026, 10, 3, 14, 0);
   });
 
   await test('푸시 발송: 방해금지 시간엔 보류, 잠금 화면 기본 문구에 금액 없음, 거부·미구독이면 알림함만', async () => {
-    db.prepare("INSERT INTO push_subs (user_id, client_id, endpoint, p256dh, auth, created_at) VALUES (3, 1, 'https://push.example.net/x', 'k', 'a', ?)").run(new Date().toISOString());
-    db.prepare("UPDATE notifications SET push_state = 'pending' WHERE client_id = 1").run();
+    (await db.run("INSERT INTO push_subs (user_id, client_id, endpoint, p256dh, auth, created_at) VALUES (2, 1, 'https://push.example.net/x', 'k', 'a', ?)", new Date().toISOString()));
+    (await db.run("UPDATE notifications SET push_state = 'pending' WHERE client_id = 1"));
     await Cl('PUT', '/api/clients/1/notif-settings', { settings: { types: {}, quietStart: '22:00', quietEnd: '08:00', push: true, lockDetails: false } });
     const sentPayloads = []; const sender = async (s, p) => { sentPayloads.push(p); return { ok: true, status: 201 }; };
     const q = await jobs.dispatch(db, 1, null, { now: new Date(2026, 10, 3, 23, 30), sender }); assert.strictEqual(q.reason, 'quiet'); assert.strictEqual(sentPayloads.length, 0);
     const d = await jobs.dispatch(db, 1, null, { now: new Date(2026, 10, 4, 9, 0), sender }); assert.ok(d.sent > 0);
     sentPayloads.forEach((p) => { assert.ok(!/\d+만원/.test(p.body), '잠금 화면에 금액 없음: ' + p.body); assert.strictEqual(p.url, '/#inbox'); });
-    db.prepare('DELETE FROM push_subs').run(); db.prepare("UPDATE notifications SET push_state = 'pending' WHERE client_id = 1").run();
+    (await db.run('DELETE FROM push_subs')); (await db.run("UPDATE notifications SET push_state = 'pending' WHERE client_id = 1"));
     const n = await jobs.dispatch(db, 1, null, { now: new Date(2026, 10, 4, 9, 0), sender }); assert.strictEqual(n.reason, 'noSubscription');
   });
 
-  server.close();
+  await app.stopAll();
   console.log('\n결과: ' + passed + '개 통과, ' + failed + '개 실패');
   process.exit(failed ? 1 : 0);
 })();

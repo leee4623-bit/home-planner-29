@@ -144,8 +144,15 @@
         id: p.id, name: p.name || '정책상품', policyId: p.policyId, start: start, term: term, maturity: start + term,
         monthly: pos(p.monthly), govRate: p.govConfirmed ? pos(p.govRate) : 0, govPending: p.govConfirmed ? 0 : pos(p.govRate),
         companyRate: p.companyConfirmed ? pos(p.companyRate) : 0, rate: pos(p.interestRate) / 100, taxFree: !!p.taxFree,
-        principal: pos(p.paidSoFar), gov: 0, company: 0, interest: 0, paid: false, payoutMonth: null, payoutAmount: 0, contribs: []
+        principal: pos(p.paidSoFar), gov: 0, company: 0, interest: 0, paid: false, payoutMonth: null, payoutAmount: 0, contribs: [],
+        lump: pos(p.lump), compound: !!p.compound
       };
+    });
+    // 예금(목돈 거치): 시작 시점에 주거자금에서 옮겨 넣고, 이자는 만기에 지급(lump). 주거자금이 모자라면 있는 만큼만.
+    prods.forEach(function (p) {
+      if (!p.lump) return;
+      var amt = Math.min(p.lump, housing); housing -= amt; p.lump = amt;
+      p.principal += amt; p.contribs.push({ t: Math.max(0, p.start), amt: amt });
     });
     prods.forEach(function (p) {
       if (p.maturity > T) warnings.push({ code: 'maturityAfterTarget', product: p.id, text: p.name + '의 만기(' + ymAdd(base, p.maturity) + ')가 이사 예정월(' + moveMonth + ')보다 늦어 목표일 주거자금에 넣지 않았습니다.' });
@@ -260,7 +267,7 @@
           p.contribs.push({ t: t, amt: amt }); productContrib += amt;
         }
         if (t === p.maturity && !p.paid) {
-          var intr = 0; p.contribs.forEach(function (c) { intr += c.amt * p.rate * (p.maturity - c.t) / 12; });
+          var intr = 0; p.contribs.forEach(function (c) { var mm = p.maturity - c.t; intr += p.compound ? c.amt * (Math.pow(1 + p.rate / 12, mm) - 1) : c.amt * p.rate * mm / 12; });
           if (!p.taxFree) intr *= 1 - 0.154;
           p.interest = intr;
           p.payoutAmount = p.principal + p.gov + p.company + intr;

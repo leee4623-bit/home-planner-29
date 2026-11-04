@@ -5,7 +5,7 @@
   'use strict';
   var FP = root.FP, C = FP.Calc, A = FP.Analysis, U = FP.UI, F = U.F, esc = U.esc, PF = FP.PlanForm;
 
-  var TABS = [['diag', '진단·판정'], ['path', '자금 경로'], ['shock', '충격 시나리오'], ['reverse', '생활비 역산'], ['policy', '정책·상품'], ['income', '소득 가정'], ['edit', '계획 버전'], ['records', '실행 기록'], ['verify', '계산 검증']];
+  var TABS = [['clientInfo', '고객 정보'], ['diag', '진단·판정'], ['risk', '성향·A/B/C'], ['monthly', '월별 실적'], ['path', '자금 경로'], ['products', '상품 비교'], ['shock', '충격 시나리오'], ['reverse', '생활비 역산'], ['policy', '정책 조건'], ['income', '소득 가정'], ['edit', '계획 버전·제시'], ['records', '실행 기록'], ['verify', '계산 검증']];
 
   function plans(S) {
     var b = S.plans.filter(function (p) { return p.id === S.ui.beforeId; })[0] || latest(S, 'before');
@@ -260,12 +260,15 @@
   // ---------- 계획 버전·편집 ----------
   function editView(S) {
     var draft = S.ui.draft;
-    var html = '<section class="card"><div class="card-head"><h2>계획 버전</h2></div><div class="table-scroll"><table class="compare-table"><thead><tr><th scope="col">구분</th><th scope="col">버전</th><th scope="col">이름·메모</th><th scope="col">작성</th><th scope="col"></th></tr></thead><tbody>' +
-      S.plans.map(function (p) { return '<tr><td>' + (p.kind === 'before' ? '<span class="plan-tag before">설계 전</span>' : '<span class="plan-tag after">설계 후</span>') + '</td><td>v' + p.version + '</td><td>' + esc(p.label || '') + '<div class="muted small">' + esc(p.note || '') + '</div></td><td class="small">' + esc(p.author) + '<br>' + F.date(p.createdAt) + '</td><td><button type="button" class="btn btn-small btn-secondary" data-edit="' + p.id + '">이 버전으로 새 안 작성</button></td></tr>'; }).join('') +
-      '</tbody></table></div><p class="muted small">저장하면 새 버전이 추가됩니다. 이전 버전과 설계 전 계획, 고객의 실행 기록은 바뀌지 않습니다.</p></section>';
+    var html = '<section class="card"><div class="card-head"><h2>계획 버전·제시</h2></div><div class="table-scroll"><table class="compare-table"><thead><tr><th scope="col">구분</th><th scope="col">버전</th><th scope="col">이름·메모</th><th scope="col">작성</th><th scope="col"></th></tr></thead><tbody>' +
+      S.plans.map(function (p) { return '<tr><td>' + (p.kind === 'before' ? '<span class="plan-tag before">설계 전</span>' : '<span class="plan-tag after">설계 후</span>') + '</td><td>v' + p.version + '</td><td>' + esc(p.label || '') + '<div class="muted small">' + esc(p.note || '') + '</div></td><td class="small">' + esc(p.author) + '<br>' + F.date(p.createdAt) + '</td><td><div class="btn-row"><button type="button" class="btn btn-small btn-secondary" data-edit="' + p.id + '">이 버전으로 새 안 작성</button>' + FP.Offers.plannerStatus(S, p) + '</div></td></tr>'; }).join('') +
+      '</tbody></table></div><p class="muted small">저장하면 새 버전(설계사 초안)이 추가되고 고객에게는 보이지 않습니다. ‘고객에게 제시’한 계획만 고객 화면에 나타나며, 고객이 선택해야 실행 기준이 됩니다. 이전 버전·고객 실적은 바뀌지 않습니다.</p></section>';
     if (!draft) return html;
     var res = C.simulate(draft.data), v = A.verdict(res);
+    var bc = S.ui.basisChanged;
     html += '<section class="card draft"><div class="card-head wrap"><h2>새 안 작성 <span class="muted small">(원본: ' + esc(draft.fromLabel) + ')</span></h2>' + U.pill(v.status, v.label) + '</div>' +
+      (bc && bc.length ? '<div class="banner banner-warn" id="basisBanner"><strong>분석 기준 정보가 변경되었습니다.</strong> 작성 중에 고객이 정보를 저장했습니다(고객 정보 v' + (S.cd ? S.cd.version : '') + '). 작성 중인 내용은 그대로 두었습니다.<ul class="plain-list small">' + bc.map(function (it) { return '<li>' + esc(it.label) + ': ' + esc(it.from || '') + (it.from ? ' → ' : '') + esc(it.to) + '</li>'; }).join('') + '</ul><div class="btn-row"><button type="button" class="btn btn-small" data-action="rebaseDraft">최신 정보로 다시 계산</button><button type="button" class="btn btn-small btn-secondary" data-action="keepDraft">지금 초안 유지</button></div></div>' : '') +
+      '<p class="muted small">이 초안의 기준: 고객 정보 v' + (draft.dataVersion == null ? '—' : draft.dataVersion) + '</p>' +
       '<p class="draft-preview" id="draftPreview">목표일 ' + res.at.ym + ' · 주거자금 ' + (res.gap >= 0 ? '여유 ' : '부족 ') + F.abs(res.gap) + ' · 부채 완료 ' + F.ym(draft.data.basis.baseMonth, res.debtFree) + '</p>' +
       '<form id="draftForm" novalidate>';
     PF.GROUPS.forEach(function (g) { html += '<fieldset class="group"><legend>' + esc(g.title) + '</legend><div class="field-grid">' + g.fields.map(function (f) { return fieldHtml('pf', f.path, f, PF.get(draft.data, f.path)); }).join('') + '</div></fieldset>'; });
@@ -329,5 +332,5 @@
     return '﻿# ' + (pl.kind === 'before' ? '설계 전' : '설계 후') + ' v' + pl.version + '\r\n' + lines.join('\r\n');
   }
 
-  FP.Planner = { TABS: TABS, plans: plans, diag: diag, path: pathView, drawPath: drawPath, shock: shockView, reverse: reverseView, policy: policyView, income: incomeView, edit: editView, records: recordsView, verify: verifyView, csv: csv, alertList: alertList, catLabel: catLabel, vLabel: vLabel, verdictBlock: verdictBlock };
+  FP.Planner = { TABS: TABS, clientInfo: function (S) { return FP.ClientInput.clientInfo(S); }, products: function (S) { return FP.ProductsView.view(S); }, plans: plans, diag: diag, path: pathView, drawPath: drawPath, shock: shockView, reverse: reverseView, policy: policyView, income: incomeView, edit: editView, records: recordsView, verify: verifyView, csv: csv, alertList: alertList, catLabel: catLabel, vLabel: vLabel, verdictBlock: verdictBlock };
 })(this);

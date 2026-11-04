@@ -2,11 +2,11 @@
  * 서비스 워커 — 앱 화면 파일만 저장합니다. /api 응답(개인 재무 데이터)은 절대 저장하지 않습니다.
  * 배포 후 파일을 고치면 VERSION을 올려야 사용자에게 '업데이트' 안내가 뜹니다.
  */
-var VERSION = 'v2.1.1';
+var VERSION = 'v3.0.0';
 var CACHE = 'fp-shell-' + VERSION;
 var FILES = ['./', './index.html', './manifest.webmanifest', './css/styles.css', './js/fonts.js',
-  './js/data/policies.js', './js/engine/calc.js', './js/engine/analysis.js', './js/data/riskConfig.js', './js/engine/risk.js', './js/engine/strategies.js', './js/engine/monthly.js', './js/install.js',
-  './js/ui/chart.js', './js/ui/components.js', './js/ui/planForm.js', './js/ui/planner.js', './js/ui/client.js', './js/ui/features.js', './js/ui/app.js',
+  './js/data/policies.js', './js/engine/calc.js', './js/engine/clientData.js', './js/engine/products.js', './js/engine/analysis.js', './js/data/riskConfig.js', './js/engine/risk.js', './js/engine/strategies.js', './js/engine/monthly.js', './js/install.js',
+  './js/ui/chart.js', './js/ui/components.js', './js/ui/sync.js', './js/ui/planForm.js', './js/ui/planner.js', './js/ui/client.js', './js/ui/features.js', './js/ui/offers.js', './js/ui/clientInput.js', './js/ui/productsView.js', './js/ui/app.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
 
 // 브라우저 캐시를 거치지 않고 최신 파일로 저장

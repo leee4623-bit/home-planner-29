@@ -10,7 +10,7 @@
 (function (root) {
   'use strict';
   var FP = root.FP, C = FP.Calc, A = FP.Analysis, L = FP.Linking, Rk = FP.Risk, St = FP.Strategies, M = FP.Monthly;
-  var KEY = 'fp21-demo-db', PW = '1234';
+  var KEY = 'fp3-demo-db', PW = '1234', CD = FP.ClientData;
   var CATS = /^(debt|emergency|housing|expense|expense:essential|expense:optional|income|product:[A-Za-z0-9_-]{1,20})$/;
   var TYPES = ['안정형', '안정추구형', '위험중립형', '적극투자형', '공격투자형'];
   var DEF_NOTIF = { types: { overspend: true, savingShort: true, emergencyLow: true, goalFlip: true, surplus: true, revision: true }, quietStart: '22:00', quietEnd: '08:00', push: false, lockDetails: false };
@@ -26,11 +26,10 @@
     return { seq: 100, session: null,
       users: [
         { id: 1, email: 'planner@demo.kr', name: '박설계(시연)', role: 'planner' },
-        { id: 2, email: 'planner2@demo.kr', name: '최설계(시연·미배정)', role: 'planner' },
         { id: 3, email: 'client@demo.kr', name: '김하늘(가상)', role: 'client', clientId: 1 },
         { id: 4, email: 'other@demo.kr', name: '이다른(가상)', role: 'client', clientId: 2 }],
       clients: [{ id: 1, profile: clone(S.PROFILE) }, { id: 2, profile: Object.assign(clone(S.PROFILE), { name: '이다른(가상)', annualGross: 33000000 }) }],
-      assignments: [[1, 1], [2, 2]],
+      assignments: [[1, 1]],
       plans: [
         { id: 1, clientId: 1, kind: 'before', version: 1, label: '설계 전 진단', note: '현재 소비·상환 습관을 유지하는 경우', data: clone(S.BEFORE), createdBy: 1, createdAt: '2026-08-20T10:00:00.000Z' },
         { id: 2, clientId: 1, kind: 'after', version: 1, label: '설계 후 1차 수정안', note: '선택지출 22만원·필수 5만원 절감, 월 15만원 추가 상환, 청년미래적금(일반형) 월 30만원, 이사월 2029-12', data: clone(S.AFTER), createdBy: 1, createdAt: '2026-08-27T10:00:00.000Z' },
@@ -44,7 +43,10 @@
       scheduled: [{ id: 1, clientId: 1, month: '2026-11', label: '10월 카드대금(미결제)', amount: 420000, category: 'optional', kind: 'card', paid: false }, { id: 2, clientId: 1, month: '2026-11', label: '월세·관리비', amount: 650000, category: 'essential', kind: 'fixed', paid: false }],
       baselines: [{ clientId: 1, planId: 2, setBy: 3, setAt: '2026-08-28T10:00:00.000Z', reason: '고객 확인' }],
       risk: [{ id: 1, clientId: 1, kind: 'official', type: '위험중립형', typeId: 3, diagnosedAt: '2024-05-10', source: 'OO은행 투자자정보확인서(가상)', purpose: '목돈 운용(펀드 가입)', snapshot: { netMonthly: 2600000, totalDebt: 28000000, purpose: '목돈 운용(펀드 가입)' }, createdAt: t }],
-      strategies: [], revisions: [], notifications: [], notif: {}, consent: {}, evalState: {}, inquiries: []
+      strategies: [], revisions: [], notifications: [], notif: {}, consent: {}, evalState: {}, inquiries: [],
+      offers: [{ id: 1, clientId: 1, planId: 2, status: 'accepted', note: '1차 상담 결과', createdBy: 1, createdAt: '2026-08-27T11:00:00.000Z', decidedAt: '2026-08-28T10:00:00.000Z' }],
+      cdata: { 1: (function () { var d = CD.fromPlan(S.BEFORE, S.PROFILE); d.goal.moveMonth = S.AFTER.basis.moveMonth; var fv = {}; CD.FIELDS.forEach(function (f) { fv[f.path] = 1; }); Object.keys(CD.LISTS).forEach(function (k) { fv[k] = 1; }); return { data: d, version: 1, fieldVersions: fv, updatedAt: '2026-08-19T10:00:00.000Z', updatedBy: '김하늘(가상)' }; })() },
+      changes: [], productRequests: []
     };
   }
   var mem = null;
@@ -142,8 +144,10 @@
   }
   function snapshotOf(cid) { var b = baseline(cid); if (!b) return {}; var d = C.normalize(b.data); return { netMonthly: d.income.netMonthly, totalDebt: d.debts.reduce(function (s, x) { return s + x.balance; }, 0), purpose: '주거자금 마련(' + d.basis.moveMonth + ' 이사)', planId: b.id }; }
 
+  function logc(cid, me, entity, text, items, extra) { var db = load(); db.changes.push(Object.assign({ id: nid(), clientId: cid, entity: entity, actorRole: me ? me.role : 'system', actorName: me ? me.name : '자동 점검', text: text, items: items || [], at: now() }, extra || {})); }
   function handle(method, path, body) {
     var db = load(), m;
+    if (path === '/api/config') return { demo: true, realtime: 'none', static: true, version: '3.0.0' };
     if (path === '/api/login' && method === 'POST') {
       var u = db.users.filter(function (x) { return x.email === String(body.email || '').trim().toLowerCase(); })[0];
       if (!u || body.password !== PW) fail(401, '이메일 또는 비밀번호가 맞지 않습니다.');
@@ -151,7 +155,9 @@
     }
     if (path === '/api/logout') { db.session = null; return { ok: true }; }
     var me = user();
-    if (path === '/api/me') return { user: pub(me) };
+    if (path === '/api/me') return { user: Object.assign(pub(me), { demo: true }), demoMode: true };
+    if (path.indexOf('/api/sync') === 0) return { changes: [], latest: 0, serverTime: now() };
+    if (path === '/api/products') return { products: FP.Products.policyProducts(), meta: {}, keyConfigured: false, investment: { connected: false, text: '투자상품은 연결된 공식 공시 자료가 없어 표시하지 않습니다.' }, staticNote: true };
     if (path === '/api/clients') return { clients: db.clients.filter(function (c) { return canAccess(me, c.id); }).map(clone) };
     if (path.indexOf('/api/push/') === 0) fail(501, '시연판(GitHub Pages)은 서버가 없어 푸시 알림을 보낼 수 없습니다. 알림은 앱을 열 때 알림함에 표시됩니다.');
     if (!(m = path.match(/^\/api\/clients\/(\d+)\/([\w-]+)(?:\/([\w-]+))?(?:\/([\w-]+))?$/))) fail(404, '없는 요청입니다.');
@@ -159,6 +165,48 @@
     clientOf(me, cid);
     var mine = function (arr) { return arr.filter(function (x) { return x.clientId === cid; }); };
 
+    if (res === 'data' && method === 'GET') { var cdx = db.cdata[cid] || { data: {}, version: 0, fieldVersions: {} }; return clone(Object.assign({}, cdx, { latestChange: 0 })); }
+    if (res === 'data' && method === 'PATCH') {
+      need(me.role === 'client', 403, '고객 정보는 고객 본인이 수정합니다.');
+      var cur = db.cdata[cid] || (db.cdata[cid] = { data: {}, version: 0, fieldVersions: {} }), set = body.set || {}, base = Number(body.baseVersion), items = [], conf = [], chg = [];
+      var gv = function (o, k) { var v = CD.LISTS[k] ? o[k] : CD.get(o, k); return v === undefined ? null : v; };
+      Object.keys(set).forEach(function (k) {
+        need(CD.LISTS[k] || CD.FIELDS.some(function (f) { return f.path === k; }), 400, '알 수 없는 항목입니다: ' + k);
+        var cv = gv(cur.data, k); if (JSON.stringify(cv) === JSON.stringify(set[k])) return;
+        if ((cur.fieldVersions[k] || 0) > base) conf.push({ path: k, label: CD.label(k), current: CD.fmt(k, cv), mine: CD.fmt(k, set[k]) }); else chg.push(k);
+      });
+      if (conf.length) { var ce = new Error('다른 기기에서 같은 항목이 먼저 저장되었습니다. 최신 값을 확인한 뒤 다시 저장해 주세요.'); ce.status = 409; ce.code = 'conflict'; ce.body = { conflicts: conf }; throw ce; }
+      if (!chg.length) return { version: cur.version, unchanged: true };
+      var nv = cur.version + 1;
+      chg.forEach(function (k) { items.push({ path: k, label: CD.label(k), from: CD.fmt(k, gv(cur.data, k)), to: CD.fmt(k, set[k]) }); if (CD.LISTS[k]) cur.data[k] = clone(set[k]); else CD.set(cur.data, k, set[k]); cur.fieldVersions[k] = nv; });
+      cur.version = nv; cur.updatedAt = now(); cur.updatedBy = me.name; logc(cid, me, 'client_data', items.length + '개 항목 변경', items, { version: nv });
+      return { version: nv, updatedAt: cur.updatedAt, changed: items };
+    }
+    if (res === 'history') return { history: mine(db.changes).slice().reverse().map(clone) };
+    if (res === 'product-requests' && method === 'GET') return { requests: mine(db.productRequests).slice().reverse().map(clone) };
+    if (res === 'product-requests' && method === 'POST') { need(me.role === 'client', 403, '검토 요청은 고객이 합니다.'); need(body.confirm === true, 400, '비교 결과를 확인해 주세요.'); db.productRequests.push({ id: nid(), clientId: cid, product: clone(body.product), simulation: clone(body.simulation || {}), status: 'requested', createdAt: now() }); return { id: mem.seq }; }
+    if (res === 'offers' && method === 'GET') return { offers: mine(db.offers).slice().reverse().map(clone) };
+    if (res === 'offers' && method === 'POST' && !sub) {
+      need(me.role === 'planner', 403, '계획 제시는 설계사가 합니다.');
+      var op = db.plans.filter(function (p) { return p.id === Number(body.planId) && p.clientId === cid && p.kind === 'after'; })[0]; need(op, 404, '제시할 설계 후 계획을 찾을 수 없습니다.');
+      mine(db.offers).forEach(function (o) { if (o.status === 'presented') { o.status = 'withdrawn'; o.decidedAt = now(); } });
+      var oid = nid(); db.offers.push({ id: oid, clientId: cid, planId: op.id, status: 'presented', note: String(body.note || '').slice(0, 300), createdBy: me.id, createdAt: now() });
+      db.notifications.push({ id: nid(), clientId: cid, type: 'revision', key: 'offer:' + oid, fact: '설계사가 새 계획(설계 후 v' + op.version + ')을 제시했습니다.', impact: '선택하기 전까지 현재 실행 기준 계획은 바뀌지 않습니다.', action: '‘A/B/C안·제안’에서 비교하고 선택하거나 보류해 주세요.', amounts: {}, createdAt: now(), readAt: null, pushState: 'none' });
+      return { id: oid };
+    }
+    if (res === 'offers' && sub) {
+      var of0 = mine(db.offers).filter(function (o) { return o.id === Number(sub); })[0]; need(of0, 404, '제시된 계획을 찾을 수 없습니다.');
+      need(act === 'withdraw' ? me.role === 'planner' : me.role === 'client', 403, '권한이 없습니다.');
+      if (act === 'accept') { need(body.confirm === true, 400, '선택 내용을 확인해 주세요.'); if (of0.status === 'accepted') return { ok: true, already: true }; }
+      need(of0.status === 'presented', 409, '이미 처리된 제시입니다.');
+      of0.status = act === 'accept' ? 'accepted' : act === 'decline' ? 'declined' : 'withdrawn'; of0.decidedAt = now();
+      if (act === 'accept') { db.baselines.push({ clientId: cid, planId: of0.planId, setBy: me.id, setAt: now(), reason: '고객 선택(제시 #' + of0.id + ')' }); evaluate(cid); }
+      return { ok: true };
+    }
+    if (res === 'plans' && method === 'GET' && me.role === 'client') {
+      var okIds = mine(db.baselines).map(function (b) { return b.planId; }).concat(mine(db.offers).map(function (o) { return o.planId; })).concat(mine(db.strategies).map(function (x) { return x.selectedPlanId; }));
+      return { plans: mine(db.plans).filter(function (p) { return p.kind === 'before' || okIds.indexOf(p.id) >= 0; }).sort(function (a, b) { return a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.version - b.version; }).map(function (p) { var o = clone(p); o.author = db.users.filter(function (x) { return x.id === p.createdBy; })[0].name; return o; }) };
+    }
     if (res === 'plans' && method === 'GET') return { plans: mine(db.plans).sort(function (a, b) { return a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.version - b.version; }).map(function (p) { var o = clone(p); o.author = db.users.filter(function (x) { return x.id === p.createdBy; })[0].name; return o; }) };
     if (res === 'plans' && method === 'POST') {
       need(me.role === 'planner', 403, '계획은 설계사만 저장할 수 있습니다.');
@@ -173,6 +221,9 @@
     if (res === 'records' && method === 'POST') {
       need(me.role === 'client', 403, '실행 기록은 고객 본인이 입력합니다.'); need(C.ymValid(body.month), 400, '월(YYYY-MM)을 확인해 주세요.'); need(CATS.test(body.category), 400, '항목을 확인해 주세요.');
       var amt = Number(body.amount); need(isFinite(amt) && amt >= 0, 400, '0 이상으로 입력해 주세요.');
+      need(!mine(db.closures).some(function (c) { return c.month === body.month; }), 409, body.month + '은(는) 이미 확정된 달입니다.');
+      var ex0 = mine(db.records).filter(function (x) { return x.month === body.month && x.category === body.category && !x.voidedAt; })[0];
+      if (ex0 && ex0.amount === amt) return { id: ex0.id, unchanged: true };
       var t0 = now(); mine(db.records).forEach(function (x) { if (x.month === body.month && x.category === body.category && !x.voidedAt) x.voidedAt = t0; });
       var rec = { id: nid(), clientId: cid, month: body.month, category: body.category, amount: amt, source: 'manual', note: '', voidedAt: null, createdAt: t0, createdBy: me.id };
       db.records.push(rec); evaluate(cid); return { id: rec.id };
@@ -222,7 +273,7 @@
         closures: mine(db.closures).map(clone).sort(function (a, b) { return a.month < b.month ? -1 : 1; }),
         revisions: mine(db.revisions).slice().reverse().map(function (r) { var o = clone(r); delete o.data; return o; }),
         notifications: mine(db.notifications).slice().reverse().map(clone), notifSettings: ctx ? ctx.notif : DEF_NOTIF, consent: ctx ? ctx.consent : DEF_CONSENT,
-        inquiries: mine(db.inquiries).slice().reverse().map(clone), pushSubscribed: false
+        inquiries: mine(db.inquiries).slice().reverse().map(clone), pushSubscribed: false, offers: mine(db.offers).slice().reverse().map(clone)
       };
     }
     if (res === 'risk' && sub === 'official') {
@@ -325,6 +376,14 @@
     fail(404, '없는 요청입니다.');
   }
 
+  // 서버판으로 옮길 때 쓰는 내보내기 파일(서버에서 미리보기 → 고객 확인 후 저장)
+  function exportData() {
+    var db = load(), u = db.users.filter(function (x) { return x.id === db.session; })[0];
+    if (!u || u.role !== 'client') return null;
+    var cid = u.clientId;
+    return { format: 'fp-export-1', exportedAt: now(), demo: true, note: '재무플래너 시연판에서 내보낸 데이터(가상 시연 데이터가 포함될 수 있음)', clientData: clone((db.cdata[cid] || {}).data || {}),
+      records: db.records.filter(function (r) { return r.clientId === cid && !r.voidedAt; }).map(function (r) { return { month: r.month, category: r.category, amount: r.amount, note: r.note || '' }; }) };
+  }
   FP.UI.api = function (method, path, body) {
     return new Promise(function (resolve, reject) {
       setTimeout(function () {
@@ -333,5 +392,5 @@
       }, 40);
     });
   };
-  FP.MockServer = { reset: function () { mem = seed(); save(); }, evaluate: evaluate };
+  FP.MockServer = { reset: function () { mem = seed(); save(); }, evaluate: evaluate, exportData: exportData };
 })(this);

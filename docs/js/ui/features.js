@@ -6,9 +6,7 @@
   var FP = root.FP, C = FP.Calc, U = FP.UI, F = U.F, esc = U.esc, R = FP.Risk, CFG = FP.RiskConfig, M = FP.Monthly, doc = root.document;
   var NTYPE = { overspend: '예산 초과', savingShort: '납입 부족', emergencyLow: '비상금 부족', goalFlip: '목표 판정 변경', surplus: '여유자금 확인', revision: '수정안' };
 
-  // ---------- 탭 등록 ----------
-  FP.Planner.TABS.splice(1, 0, ['risk', '성향·A/B/C'], ['monthly', '월별 실적']);
-  FP.Client.TABS.splice(1, 0, ['monthly', '월별 지출'], ['chat', '성향·설계안'], ['inbox', '알림함']);
+  // 탭 목록은 planner.js·client.js에서 정합니다.
 
   function S0() { return FP.App.S; }
   function closedList(S) { return S.x ? S.x.closures.map(function (c) { return c.month; }) : []; }
@@ -133,8 +131,10 @@
   function chatState(S) { if (!S.chat) S.chat = { mode: 'intro', step: 0, answers: {}, faq: [] }; return S.chat; }
   function bubble(who, html) { return '<div class="msg msg-' + who + '"><div class="msg-body">' + html + '</div></div>'; }
 
-  FP.Client.chat = function (S) {
-    var ch = chatState(S), Q = CFG.QUESTIONS, html = '<section class="card chat"><div class="card-head wrap"><h2>위험성향 확인</h2>' + U.badge(CFG.LABEL) + '</div><div class="chat-log" id="chatLog">';
+  // opts.embedded: ‘내 정보·실적 입력’ 5번 구역 안에 넣을 때(설계안 영역 제외)
+  FP.Client.chat = function (S, opts) {
+    var embedded = opts && opts.embedded;
+    var ch = chatState(S), Q = CFG.QUESTIONS, html = '<div class="chat"><div class="card-head wrap"><h3>위험성향 확인</h3>' + U.badge(CFG.LABEL) + '</div><div class="chat-log" id="chatLog">';
     var off = latestOf(S, 'official'), app = latestOf(S, 'app');
     html += bubble('bot', '안녕하세요. 이사자금 계획에 맞는 실행안을 고르기 전에 <strong>위험을 얼마나 감수할 수 있는지</strong> 확인할게요.' +
       (off ? '<div class="prev-box"><strong>금융기관 결과</strong> ' + esc(off.type) + ' · ' + esc(off.diagnosedAt) + ' · ' + esc(off.source) + '<br><span class="muted small">당시 목적: ' + esc(off.purpose || '—') + '</span></div>' : '') +
@@ -162,8 +162,8 @@
       } else html += resultBox(S, ch);
       html += '<div class="faq-box"><label for="faqIn">궁금한 점 물어보기 <span class="muted small">(설명만 드리고 점수에는 반영하지 않습니다)</span></label><div class="field-inline"><input id="faqIn" type="text" maxlength="100" placeholder="예: 원금 손실이 뭐예요?"><button type="button" class="btn btn-secondary btn-small" data-fx="faqAsk">질문</button></div></div>';
     }
-    html += '</section>';
-    html += strategySection(S);
+    html += '</div>';
+    if (!embedded) html = '<section class="card">' + html + '</section>' + strategySection(S);
     return html;
   };
   function resultBox(S, ch) {
@@ -279,12 +279,14 @@
       (c.agreedAt ? '<p class="muted small">동의일 ' + F.date(c.agreedAt) + '</p>' : '') + '<button type="button" class="btn btn-secondary" data-fx="saveConsent">저장</button></section>';
   }
   FP.Planner.monthly = monthlyView;
-  FP.Client.monthly = monthlyView;
+  FP.Client.monthlyCore = monthlyView;
+  FP.Client.monthly = function (S) { return FP.Client.monthlyAll(S); };
 
   // ======================================================================
   // 알림함
   // ======================================================================
-  FP.Client.inbox = function (S) {
+  FP.Client.inbox = function (S) { return FP.Client.inboxAll(S); };
+  FP.Client.inboxCore = function (S) {
     var ns = S.x.notifSettings, list = S.x.notifications;
     var revOf = function (id) { return S.x.revisions.filter(function (r) { return r.id === id; })[0]; };
     var html = '<section class="card"><div class="card-head wrap"><h2>알림함</h2><button type="button" class="btn btn-small btn-secondary" data-fx="evaluate">지금 점검</button></div>' +
@@ -391,8 +393,8 @@
     onLoad: function (S) { /* 채팅 상태는 다시 불러와도 유지 */ },
     afterRender: function (S) {
       if (S.ui.scrollTo) { var el = doc.getElementById(S.ui.scrollTo); if (el) { el.scrollIntoView({ block: 'start' }); el.classList.add('flash'); } S.ui.scrollTo = null; }
-      if (S.ui.tab === 'chat') { var l = doc.getElementById('chatLog'); if (l) l.scrollTop = l.scrollHeight; }
+      if (S.ui.tab === 'input') { var l = doc.getElementById('chatLog'); if (l) l.scrollTop = l.scrollHeight; }
     },
-    strategyCards: strategyCards
+    strategyCards: strategyCards, strategySection: strategySection, alertsAndInbox: null
   };
 })(this);
