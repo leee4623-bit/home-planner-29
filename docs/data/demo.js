@@ -176,43 +176,57 @@
    */
   var DEMO = {
     schemaVersion: 1,
-    demoVersion: 3,
+    demoVersion: 4,
     demoToday: '2026-11-03',
+    intake: { done: true, source: 'example', savedAt: '2026-11-03' },
     activePlanId: 'after-v1',
     caseSource: 'AFPK 영 플래너 챌린지 2026 재무설계 사례 보고서(가상 고객 B안, 기준일 2026-11-03)',
 
+    // 초기 고객정보(사실만). 화면의 '설계 예시 불러오기'와 같은 값이다(src/intake.js EXAMPLE, 테스트로 일치 확인).
+    // 생활비 200·대출 700 상환·연금 월 10·목적자금 110 같은 설계 내용은 아래 plans의 설계안에만 둔다.
     customer: {
       name: '가상 고객 B',
-      birth: '1997-06',         // 보고서는 '만 29세'만 제시 — 나이 계산용 가정
-      firstJob: '2024-01',      // 보고서는 '재직 3년 차'만 제시 — 계산용 가정
-      job: '사무직(정규직)',
+      age: 29,
+      birth: '1997-05',         // 만 29세만 주어짐 — 정책 조건 계산용 가정(기준월 − 나이 − 6개월)
+      birthAssumed: true,
+      firstJob: '2024-01',      // 재직 3년 차 — 계산용 가정
+      tenure: 3,
+      job: '정규직 사무직',
       companySize: '중소기업',
-      region: '미정',
-      household: '1인 가구 · 2029년 10월 결혼과 함께 신혼주거로 이전 계획',
+      household: '미혼 1인 가구',
+      region: '',
       grossPrevYear: 4500,
       netMonthly: 320,
       taxExemption: null,       // 중소기업 취업자 소득세 감면: 실수령 320에 반영됐는지 확인 필요(보고서 9장)
-      cash: 200,                // 입출금예금(즉시 사용)
+      cash: 200,
       savings: 600,             // 만기 예·적금(해지손실 없음)
       emergency: 0,
       housing: 0,
-      investment: 400,          // 일반계좌 ETF(비용 차감 후 현금화 금액)
-      depositReturn: { amount: 1000, month: '2029-10', note: '현재 보증금 전액 반환 후 재사용 — 반환일 확인 필요' },
-      pension: 100,             // 연금저축(노후 목적, 주거·비상금에서 제외)
+      investment: 400,          // ETF 순현금화 금액
+      pension: 100,             // 연금저축(노후 목적)
+      depositReturn: { amount: 1000, month: '2029-10', note: '반환월 미확인 — 목표 시점에 반환된다고 가정' },
       debts: [
-        { name: '신용대출', balance: 1000, rate: 0.072, method: 'equalPrincipal', monthlyPrincipal: 1000 / 36, monthlyPayment: 1000 / 36 + 6, note: '잔여 36개월 원금균등 상환' }
+        { name: '신용대출', balance: 1000, rate: 0.072, remainingMonths: 36, method: 'equalPrincipal', monthlyPrincipal: 1000 / 36, monthlyPayment: 1000 / 36 + 1000 * 0.072 / 12, note: '잔여 36개월 원금균등 상환' }
       ],
-      goal: { depositTarget: 4000, movingCost: 150, emergencyTarget: 990, emergencyBasis: '필수생활비 165 × 6개월' },
-      livingDetail: [ // 보고서 표 9(만원/월): [항목, 기존, 조정, 필수 여부]
-        ['월세·관리비', 70, 70, true], ['교통', 10, 10, true], ['식비·생필품', 60, 45, true], ['통신·구독', 8, 5, true],
-        ['보험', 8, 8, true], ['부모 지원', 15, 15, true], ['건강·자기계발', 12, 12, true], ['여가·쇼핑', 42, 25, false], ['비정기 적립', 10, 10, false]
+      goal: { depositTarget: 4000, movingCost: 150, emergencyTarget: 990, emergencyBasis: '고객 입력 목표' },
+      livingItems: [
+        { key: 'rent', label: '월세·관리비', amount: 70, essential: true },
+        { key: 'transport', label: '교통비', amount: 10, essential: true },
+        { key: 'food', label: '식비·생필품', amount: 60, essential: true },
+        { key: 'telecom', label: '통신·구독', amount: 8, essential: true },
+        { key: 'insurance', label: '보험료', amount: 8, essential: true },
+        { key: 'parents', label: '부모 지원', amount: 15, essential: true },
+        { key: 'health', label: '건강·자기계발', amount: 12, essential: true },
+        { key: 'leisure', label: '여가·쇼핑', amount: 42, essential: false },
+        { key: 'irregular', label: '비정기 적립', amount: 10, essential: false },
+        { key: 'otherEss', label: '기타 필수 지출', amount: 0, essential: true },
+        { key: 'otherOpt', label: '기타 선택 지출', amount: 0, essential: false }
       ],
-      valueSpending: '부모 지원 월 15, 건강·자기계발 월 12는 고객이 유지하려는 지출',
-      risk: {
-        institution: null,
-        appSurvey: null,
-        note: '일반계좌 ETF 투자 경험 2년. 장기투자의 가격 변동과 단기 주거자금의 원금손실 위험을 구분하며, 주거자금에서는 원금손실을 피하려 함(보고서 표 1)'
-      }
+      existingSaving: { monthly: 50, note: '세부 구성 미확인' },
+      preferences: { keepSpending: '부모 지원, 건강·자기계발 지출 유지', principal: '단기 주거자금은 원금손실 회피', newLoan: '결혼 전 신규 신용대출 추가 없음', memo: '' },
+      risk: { institution: null, appSurvey: null, note: '단기 주거자금은 원금손실 회피 · 결혼 전 신규 신용대출 추가 없음' },
+      unknown: [],
+      isExample: true
     },
 
     plans: [
@@ -254,7 +268,9 @@
         author: '설계사',
         selectedBy: '고객(가상)',
         selectedAt: '2026-11-03',
-        selectionNote: '보고서의 설계상 선택이며 실제 고객 동의·상품 가입·대출 상환은 이루어지지 않음'
+        selectionNote: '보고서의 설계상 선택이며 실제 고객 동의·상품 가입·대출 상환은 이루어지지 않음',
+        // 보고서 표 9의 조정 후 생활비(만원/월). 고객정보의 기존 생활비와 따로 둔다.
+        livingAdjust: [['식비·생필품', 60, 45], ['통신·구독', 8, 5], ['여가·쇼핑', 42, 25]]
       }
     ],
 

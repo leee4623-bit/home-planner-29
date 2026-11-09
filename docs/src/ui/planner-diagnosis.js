@@ -74,16 +74,6 @@
         { html: ui.esc(r.cause), cls: 'l' }
       ];
     });
-    var bres = P.engine.runPlan(c.state, before.id);
-    var goal = bres.input.goal;
-    var chart = ui.fundChart({
-      title: '설계 전 자금 경로',
-      width: 640, height: 240,
-      series: [{ key: 'before', label: '설계 전 예상(사용 가능 주거자금)', color: '--chart-before', dashed: true, points: bres.rows.map(function (r) { return { month: r.month, value: r.usable }; }) },
-        { key: 'em', label: '설계 전 비상금', color: '--chart-trend', dashed: true, points: bres.rows.map(function (r) { return { month: r.month, value: r.emergency }; }) }],
-      target: { value: goal.depositTarget + goal.movingCost, label: '목표 ' + fmt.short(goal.depositTarget + goal.movingCost) },
-      events: bres.events.filter(function (e) { return ['emergencyReached', 'highDebtPaidOff', 'depositReturn', 'taxExemptionEnd', 'move'].indexOf(e.type) >= 0; })
-    });
     var hb = ui.cond(jb, 'housing');
     var ha = ui.cond(ja, 'housing');
     return ui.pageHead('진단', '계획값 기준(실행 기록 반영 전). 기준일 ' + ui.esc(cmp.asOf) + ' · 단위 만원') +
@@ -96,11 +86,12 @@
       ui.kpi('비상자금(설계 후)', '<span class="num">' + fmt.num1(cmp.after.list.filter(function (m) { return m.key === 'emergencyMonths'; })[0].value) + '<small>개월</small></span>', '기준 3개월') +
       ui.kpi('고금리 상환 완료', '<span>' + ui.esc(cmp.before.list.filter(function (m) { return m.key === 'payoff'; })[0].sub[0].value || '—') + ' → ' + ui.esc(cmp.after.list.filter(function (m) { return m.key === 'payoff'; })[0].sub[0].value || '—') + '</span>') +
       '</section>' +
+      '<section class="card"><h2>설계 전·후 목표 비교</h2>' + ui.beforeAfterChart(c) + '</section>' +
       '<section class="card"><h2>목표 판정(이사월 말 기준)</h2>' + judgeTable(jb, ja, ['설계 전 「' + before.name + '」', '설계 후 「' + after.name + '」']) + '</section>' +
       ui.modelsCard(c) +
       '<section class="card"><h2>진단 지표</h2>' + ui.table(['지표', '설계 전', '설계 후', '기준', '상태(설계 후)', '바뀐 원인'], mrows, { caption: '진단 지표' }) +
       '<p class="small muted">기준값(설정값): 비상자금 3개월 이상, 부채비율 40% 이하(60% 넘으면 경보), 원리금 상환비중 20% 이하(30% 넘으면 경보).</p></section>' +
       '<section class="card"><h2>유동성 진단</h2><p>' + ui.esc(liquidityText(cmp.after)) + '</p><p class="small muted">규칙 기반 문장입니다(설계 후 계획, ' + ui.esc(cmp.asOf) + ' 기준).</p></section>' +
-      '<section class="card"><h2>설계 전 자금 경로</h2>' + chart + '</section>';
+      '<section class="card"><h2>주거자금 진행(실행 기준 계획)</h2>' + ui.housingChart(c, { result: P.engine.runPlan(c.state, activeId), label: '실행 기준 계획 예상', compareKey: 'cmpBeforeDx' }) + '</section>';
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -78,7 +78,7 @@
   function errorBox(msg) {
     return '<div class="card" role="alert"><h2>' + badge('문제가 생겼어요', 'bad') + '</h2><p>' + esc(msg) +
       '</p><div class="btn-row"><button class="btn btn-primary" data-action="retry">다시 시도</button>' +
-      '<button class="btn" data-action="reset-demo-confirm">시연 데이터로 초기화</button></div></div>';
+      '<button class="btn" data-action="reset-demo-confirm">설계 예시로 되돌리기</button></div></div>';
   }
 
   function kpi(label, valueHtml, sub) {

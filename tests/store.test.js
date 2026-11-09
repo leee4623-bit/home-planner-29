@@ -101,12 +101,13 @@ test('보류하면 상태만 바뀌고 계획은 그대로', () => {
   assert.equal(s.activePlanId, 'after-v1');
 });
 
-test('저장소: 저장 후 다시 읽으면 같은 상태, 첫 방문이면 시연 데이터', () => {
+test('저장소: 첫 방문이면 빈 상태(고객정보 입력부터), 저장 후 다시 읽으면 같은 상태', () => {
   const st = St.createStore(memStorage());
   const first = st.load();
-  assert.equal(first.source, 'demo');
+  assert.equal(first.source, 'empty');
   assert.equal(first.firstVisit, true);
-  const s2 = St.upsertRecord(first.state, '2026-12', 'debt', 65);
+  assert.equal(first.state, null);
+  const s2 = St.upsertRecord(demo.getDemo(), '2026-12', 'debt', 65);
   assert.deepEqual(st.save(s2), { ok: true, mode: 'storage' });
   const again = st.load();
   assert.equal(again.source, 'saved');
@@ -119,20 +120,39 @@ test('저장소: 읽기·쓰기가 실패하면 메모리 모드로 계속 동�
   const st = St.createStore(brokenStorage());
   const { state } = st.load();
   assert.equal(st.mode, 'memory');
-  const s2 = St.upsertRecord(state, '2026-12', 'debt', 65);
-  assert.equal(st.save(s2).mode, 'memory');
+  assert.equal(state, null);
+  const s2 = St.upsertRecord(demo.getDemo(), '2026-12', 'debt', 65);
+  const saved = st.save(s2);
+  assert.equal(saved.mode, 'memory');
+  assert.equal(saved.ok, false); // 저장 실패를 성공으로 알리지 않는다
   assert.equal(St.getRecord(st.load().state, '2026-12').debt, 65);
   const none = St.createStore(null);
   assert.equal(none.mode, 'memory');
-  assert.equal(none.load().source, 'demo');
+  assert.equal(none.load().source, 'empty');
+  assert.equal(none.save(s2).ok, false);
 });
 
-test('저장소: 깨진 저장값이면 시연 데이터로 연다', () => {
+test('저장소: 깨진 저장값은 지우지 않고 백업한 뒤 입력 화면부터 연다', () => {
   const m = memStorage();
   m.setItem(St.STORAGE_KEY, '{망가진');
-  assert.equal(St.createStore(m).load().source, 'demo');
+  const r = St.createStore(m).load();
+  assert.equal(r.source, 'empty');
+  assert.equal(r.corrupt, true);
+  assert.equal(m.getItem(St.BACKUP_KEY), '{망가진');
+  assert.equal(m.getItem(St.STORAGE_KEY), '{망가진'); // 원본도 그대로
   m.setItem(St.STORAGE_KEY, JSON.stringify({ customer: {}, plans: [] }));
-  assert.equal(St.createStore(m).load().source, 'demo');
+  assert.equal(St.createStore(m).load().source, 'empty');
+});
+
+test('저장소: 예전 저장본(입력 완료 표시 없음)은 자동 삭제 없이 이어서 쓴다', () => {
+  const m = memStorage();
+  const old = demo.getLegacyDemo();
+  delete old.intake;
+  m.setItem(St.STORAGE_KEY, JSON.stringify(old));
+  const r = St.createStore(m).load();
+  assert.equal(r.source, 'saved');
+  assert.equal(r.state.intake.done, true);
+  assert.equal(r.state.customer.name, old.customer.name);
 });
 
 test('내보내기·불러오기 왕복, 잘못된 파일은 사람이 읽을 수 있는 오류', () => {

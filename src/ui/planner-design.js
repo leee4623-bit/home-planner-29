@@ -205,11 +205,11 @@
   TOOL_PAGES.scenario = function (c) {
     var list = c.view.scn || defaultScenarios(c);
     var T = P.scenarios.SCENARIO_TYPES;
-    var form = '<form data-submit="scenario-run">' + ui.table(['켜기', '충격', '시작월', '기간(개월, 0=끝까지)', '크기', '기간 중 대응'], list.map(function (s, i) {
+    var form = '<form data-submit="scenario-run">' + ui.table(['비교', '충격', '시작월', '기간(개월, 0=끝까지)', '크기', '기간 중 대응'], list.map(function (s, i) {
       var t = T[s.type];
       var val = PCT_TYPES[s.type] ? Math.round(s.value * 1000) / 10 : s.value;
       return [
-        { html: '<input type="checkbox" name="on' + i + '" aria-label="' + t.label + ' 켜기"' + (s.enabled ? ' checked' : '') + '>' },
+        { html: '<input type="radio" name="pick" value="' + i + '" aria-label="' + t.label + ' 선택"' + (s.enabled ? ' checked' : '') + '>' },
         { html: '<strong>' + t.label + '</strong>', cls: 'l' },
         { html: t.needsStart ? '<input type="month" name="start' + i + '" value="' + ui.esc(s.start) + '" aria-label="' + t.label + ' 시작월">' : '—' },
         { html: t.needsMonths ? '<input type="number" min="0" name="months' + i + '" value="' + ui.esc(s.months) + '" aria-label="' + t.label + ' 기간">' : '—' },
@@ -218,21 +218,14 @@
           ? '<input type="number" min="0" step="1" style="width:6em" name="living' + i + '" value="' + ui.esc(s.living || '') + '" placeholder="그대로" aria-label="' + t.label + ' 기간 생활비"> <span class="small muted">생활비(만원)</span><br><label class="small"><input type="checkbox" name="pp' + i + '"' + (s.pausePension ? ' checked' : '') + '> 연금 납입 중지</label>'
           : '—' }
       ];
-    }), { caption: '충격 시나리오 입력', maxHeight: 'none' }) + '<div class="btn-row"><button class="btn btn-primary" type="submit">켠 충격을 함께 적용</button></div></form>';
+    }), { caption: '충격 시나리오 입력', maxHeight: 'none' }) + '<div class="btn-row"><button class="btn btn-primary" type="submit">선택한 시나리오로 비교</button></div></form>';
     var r = P.scenarios.compare(c.state, c.state.activePlanId, list, eo(c));
     var tm = r.base.input.targetMonth;
     var b = engine.rowAt(r.base, tm);
     var s = engine.rowAt(r.shocked, engine.rowAt(r.shocked, tm) ? tm : r.shocked.input.targetMonth);
-    var goal = r.shocked.input.goal;
-    var chart = ui.fundChart({
-      width: 640, height: 240, title: '충격 전후 자금 경로',
-      series: [
-        { key: 'base', label: '충격 없음', color: '--chart-plan', dashed: true, points: r.base.rows.map(function (x) { return { month: x.month, value: x.usable }; }) },
-        { key: 'shock', label: '충격 적용', color: '--chart-trend', dashed: true, points: r.shocked.rows.map(function (x) { return { month: x.month, value: x.usable }; }) }
-      ],
-      target: { value: goal.depositTarget + goal.movingCost, label: '목표 ' + fmt.short(goal.depositTarget + goal.movingCost) }
-    });
-    return '<section class="card"><h2>충격 조합</h2><p class="small muted">확률이 아니라 "이 충격이 오면"의 조건부 결과입니다. 여러 개를 동시에 켤 수 있습니다.</p>' + form + '</section>' +
+    var picked = list.filter(function (x) { return x.enabled; })[0];
+    var chart = ui.scenarioChart(r, picked ? T[picked.type].label : '충격 없음');
+    return '<section class="card"><h2>충격 시나리오</h2><p class="small muted">확률이 아니라 "이 충격이 오면"의 조건부 결과입니다. 그래프가 복잡해지지 않도록 기본안과 선택한 시나리오 하나씩 비교합니다.</p>' + form + '</section>' +
       '<section class="card"><p class="conclusion">' + ui.esc(r.sentences.join(' ')) + '</p>' +
       '<div class="kpis k4">' + ui.kpi('판정(충격 없음)', ui.judgementBadge(r.base.judgement)) + ui.kpi('판정(충격 적용)', ui.judgementBadge(r.shocked.judgement)) +
       ui.kpi('이사 때 쓸 돈 변화', b && s ? ui.delta(s.usable - b.usable, true) + '<small>만원</small>' : '—') +
@@ -362,7 +355,7 @@
       var list = (c.view.scn || defaultScenarios(c)).map(function (s, i) {
         var raw = Number(fd.get('value' + i));
         return Object.assign({}, s, {
-          enabled: fd.get('on' + i) === 'on',
+          enabled: String(fd.get('pick')) === String(i),
           start: fd.get('start' + i) || s.start,
           months: fd.get('months' + i) === null ? s.months : Number(fd.get('months' + i)) || 0,
           value: Number.isFinite(raw) ? (PCT_TYPES[s.type] ? raw / 100 : raw) : s.value,

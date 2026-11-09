@@ -17,21 +17,9 @@
     { key: 'tour', label: '둘러보기 다시 보기', desc: '설계 전후 진단부터 고객 선택까지 4단계(약 2분)' }
   ];
 
-  var LABELS = {
-    name: '이름', birth: '출생 연월', firstJob: '최초 취업월', job: '직업', companySize: '회사 규모', region: '지역',
-    grossPrevYear: '직전연도 총급여', netMonthly: '월 실수령', taxExemption: '중소기업 취업 청년 소득세 감면',
-    cash: '목적 미지정 현금·예금', emergency: '비상금', housing: '주거자금', investment: '투자자산', pension: '연금',
-    depositReturn: '보증금 반환', debts: '부채', goal: '목표'
-  };
-
   function back() {
     return '<button class="link-btn" data-action="more" data-key="">← 더보기</button>';
   }
-
-  function input(name, label, value, type, attrs) {
-    return '<div class="field"><label for="f-' + name + '">' + label + '</label><input id="f-' + name + '" name="' + name + '" type="' + (type || 'text') + '" value="' + ui.esc(value === undefined || value === null ? '' : value) + '"' + (attrs || '') + '></div>';
-  }
-  function money(name, label, value) { return input(name, label + '(만원)', value, 'number', ' min="0" step="0.1" inputmode="decimal"'); }
 
   function issuesBox(c) {
     var list = c.d.issues;
@@ -41,35 +29,33 @@
       '</ul><p class="small muted">저장은 되지만 계산 결과가 실제와 다를 수 있어요.</p></div></div>';
   }
 
+  /** 내 정보: 입력한 고객정보 요약(미확인 표시). 수정은 첫 화면과 같은 입력 화면에서 한다. */
+  ui.factValue = function (k, key, val, unit) {
+    if ((k.unknown || []).indexOf(key) >= 0) return '<span class="muted">미확인</span>';
+    if (val === null || val === undefined || val === '') return '<span class="muted">미확인</span>';
+    return typeof val === 'number' ? fmt.num1(val) + (unit === undefined ? '만원' : unit) : ui.esc(val);
+  };
+
   function infoView(c) {
     var k = c.state.customer;
-    var te = k.taxExemption || {};
-    var dr = k.depositReturn || {};
-    var g = k.goal || {};
-    var debts = (k.debts || []).slice();
-    while (debts.length < 3) debts.push({ name: '', balance: '', rate: '', monthlyPayment: '' });
-    var sizes = ['중소기업', '중견기업', '대기업', '공공기관', '기타'];
-    return back() + '<section class="card"><h2>내 정보</h2>' + issuesBox(c) +
-      '<form data-submit="save-info">' +
-      '<fieldset><legend>기본정보</legend>' + input('name', '이름', k.name) +
-      '<div class="grid-2">' + input('birth', '출생 연월', k.birth, 'month') + input('firstJob', '최초 취업월', k.firstJob, 'month') + '</div>' +
-      '<div class="grid-2">' + input('job', '직업', k.job) +
-      '<div class="field"><label for="f-size">회사 규모</label><select id="f-size" name="companySize">' + sizes.map(function (s) { return '<option' + (k.companySize === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div></div>' +
-      input('region', '지역', k.region) + '</fieldset>' +
-      '<fieldset><legend>소득</legend><div class="grid-2">' + money('grossPrevYear', '직전연도 총급여', k.grossPrevYear) + money('netMonthly', '월 실수령', k.netMonthly) + '</div>' +
-      '<label class="choice"><input type="checkbox" name="teApplied"' + (te.applied ? ' checked' : '') + '>중소기업 취업 청년 소득세 감면 적용 중(급여에 이미 반영)</label>' +
-      '<div class="grid-2">' + input('teStart', '감면 시작월', te.start, 'month') + input('teEnd', '감면 종료월', te.end, 'month') + '</div>' +
-      money('teEffect', '감면 종료 후 줄어드는 월 실수령', te.monthlyEffect) + '</fieldset>' +
-      '<fieldset><legend>자산</legend><div class="grid-2">' + money('cash', '목적 미지정 현금', k.cash) + money('emergency', '비상금', k.emergency) +
-      money('housing', '주거자금', k.housing) + money('investment', '투자자산', k.investment) + money('pension', '연금', k.pension) + money('drAmount', '돌려받을 보증금', dr.amount) + '</div>' +
-      input('drMonth', '보증금 반환월', dr.month, 'month') + '</fieldset>' +
-      '<fieldset><legend>부채(최대 3개)</legend>' + debts.slice(0, 3).map(function (d, i) {
-        return '<div class="option"><div class="grid-2">' + input('d' + i + 'name', '이름', d.name) + money('d' + i + 'balance', '잔액', d.balance) +
-          input('d' + i + 'rate', '연 금리(%)', d.rate === '' ? '' : Math.round(Number(d.rate) * 10000) / 100, 'number', ' min="0" step="0.01"') + money('d' + i + 'pay', '월 약정 상환', d.monthlyPayment) + '</div></div>';
-      }).join('') + '<p class="small muted">이름을 비우면 그 부채는 저장하지 않아요.</p></fieldset>' +
-      '<fieldset><legend>목표</legend><div class="grid-2">' + money('gDeposit', '목표 보증금', g.depositTarget) + money('gMoving', '이사비', g.movingCost) + money('gEmergency', '비상금 목표', g.emergencyTarget) + '</div></fieldset>' +
-      '<p class="small muted">설계사는 이 정보를 조회만 하고 고칠 수 없어요. 바꾼 항목은 변경 이력에 남아요.</p>' +
-      '<button class="btn btn-primary btn-block" type="submit">저장</button></form></section>';
+    var fv = function (key, val, unit) { return ui.factValue(k, key, val, unit); };
+    var d0 = (k.debts || [])[0];
+    var lv = (k.livingItems || []).map(function (it) {
+      return '<li><span>' + ui.esc(it.label) + (it.essential ? ' <span class="small muted">필수</span>' : '') + '</span><span class="num">' + fv('lv_' + it.key, it.amount) + '</span></li>';
+    }).join('');
+    var row = function (l, v) { return '<li><span>' + l + '</span><span class="num">' + v + '</span></li>'; };
+    return back() + '<section class="card"><div class="card-head"><h2>내 정보</h2><button class="btn btn-sm btn-primary" data-action="edit-info">고객정보 수정</button></div>' + issuesBox(c) +
+      '<h3>기본정보</h3><ul class="kv">' + row('이름', ui.esc(k.name)) + row('만 나이', k.age ? k.age + '세' : '<span class="muted">미확인</span>') + row('가구', fv('household', k.household)) + row('직업·회사', ui.esc([k.job, k.companySize].filter(Boolean).join(' · ') || '미확인')) + '</ul>' +
+      '<h3>소득과 지출</h3><ul class="kv">' + row('월 실수령', fv('netMonthly', k.netMonthly)) + row('연 총급여', fv('grossPrevYear', k.grossPrevYear)) +
+      row('기존 저축·투자(월)', k.existingSaving && k.existingSaving.monthly !== null && k.existingSaving.monthly !== undefined ? fmt.num1(k.existingSaving.monthly) + '만원' + (k.existingSaving.note ? ' <span class="small muted">' + ui.esc(k.existingSaving.note) + '</span>' : '') : '<span class="muted">미확인</span>') + '</ul>' +
+      (lv ? '<ul class="kv sub">' + lv + '</ul>' : '') +
+      '<h3>자산과 부채</h3><ul class="kv">' + row('현금·입출금', fv('cash', k.cash)) + row('만기 예·적금', fv('savings', k.savings)) + row('투자자산', fv('investment', k.investment)) + row('연금저축', fv('pension', k.pension)) +
+      row('비상금(별도)', fv('emergency', k.emergency)) + row('주거자금(별도)', fv('housing', k.housing)) +
+      row('임차보증금', k.depositReturn ? fmt.num1(k.depositReturn.amount) + '만원 · ' + ui.esc(k.depositReturn.month) + ' 반환' : fv('depositCurrent', null)) +
+      row('부채', d0 ? ui.esc(d0.name) + ' ' + fmt.num1(d0.balance) + '만원 · 연 ' + fmt.short(d0.rate * 100) + '% · ' + (d0.method === 'equalPrincipal' ? '원금균등' : '원리금균등') : '없음') + '</ul>' +
+      '<h3>목표와 선호</h3><ul class="kv">' + row('목표 보증금', fv('depositTarget', k.goal.depositTarget)) + row('부대비용', fv('movingCost', k.goal.movingCost)) + row('비상금 목표', fv('emergencyTarget', k.goal.emergencyTarget)) +
+      (k.preferences ? row('선호', ui.esc([k.preferences.principal, k.preferences.newLoan, k.preferences.keepSpending].filter(function (x) { return x && x !== '미확인'; }).join(' · ') || '미확인')) : '') + '</ul>' +
+      '<p class="small muted">수정하면 고객용·설계사용 화면 결과가 함께 다시 계산돼요. 설계안의 수동 조정값은 바뀌지 않아요.</p></section>';
   }
 
   function riskView(c) {
@@ -112,15 +98,17 @@
   function dataView(c) {
     var mode = ui.app.store.mode;
     var confirm = c.view.confirm === 'reset-demo'
-      ? '<div class="notice warn" role="alert"><div><p><strong>시연 데이터로 되돌릴까요?</strong> 지금 기록·계획 버전·설정이 모두 지워져요. 먼저 내보내기를 해 두면 다시 불러올 수 있어요.</p>' +
+      ? '<div class="notice warn" role="alert"><div><p><strong>설계 예시로 되돌릴까요?</strong> 지금 기록·계획 버전·설정이 모두 지워져요. 먼저 내보내기를 해 두면 다시 불러올 수 있어요.</p>' +
         '<div class="btn-row"><button class="btn btn-danger" data-action="reset-demo">초기화</button><button class="btn" data-action="cancel-confirm">취소</button></div></div></div>'
-      : '<button class="btn btn-danger btn-block" data-action="reset-demo-confirm">시연 데이터로 초기화</button>';
+      : '<button class="btn btn-danger btn-block" data-action="reset-demo-confirm">설계 예시로 되돌리기</button>';
     return back() + '<section class="card"><h2>데이터 관리</h2>' +
       '<p class="small">' + (mode === 'storage' ? '데이터는 이 기기의 브라우저에만 저장돼요. 다른 사람이 바꿀 수 없어요.' : '이 브라우저에는 저장할 수 없어 창을 닫으면 사라져요. 내보내기로 보관하세요.') + '</p>' +
       '<div class="btn-row"><button class="btn btn-primary" data-action="export-json">데이터 내보내기(JSON)</button>' +
       '<label class="btn" for="import-file">불러오기</label><input id="import-file" class="sr-only" type="file" accept=".json,application/json" data-change="import-json"></div>' +
-      '<p class="small muted">불러오면 지금 데이터를 파일 내용으로 바꿔요.</p></section>' +
-      '<section class="card"><h2>시연 데이터</h2><p class="small muted">시연 고객(사례 보고서 가상 고객 B안)의 처음 상태로 되돌립니다.</p>' + confirm + '</section>';
+      '<p class="small muted">불러올 때는 파일 내용을 먼저 보여 드리고, 반영을 눌러야 바뀌어요. 다른 기기와 자동으로 공유되지 않아요.</p></section>' +
+      '<section class="card"><h2>설계 예시</h2><p class="small muted">설계 예시(사례 보고서 가상 고객)의 처음 상태로 되돌립니다.</p>' + confirm + '</section>' +
+      '<section class="card"><h2>처음부터 다시</h2><p class="small muted">모든 데이터를 지우고 고객정보 입력 화면부터 다시 시작합니다.</p><button class="btn btn-danger btn-block" data-action="start-over-confirm">처음부터 다시 입력</button>' +
+      (c.view.confirm === 'start-over' ? '<div class="notice warn" role="alert"><div><p><strong>모든 데이터를 지울까요?</strong> 이 브라우저에 백업 1개를 남깁니다.</p><div class="btn-row"><button class="btn btn-danger" data-action="start-over">지우고 다시 입력</button><button class="btn" data-action="cancel-confirm">취소</button></div></div></div>' : '') + '</section>';
   }
 
   function installView() {
@@ -154,35 +142,6 @@
   Object.assign(ui.actions, {
     more: function (c, el) { ui.setView({ more: el.getAttribute('data-key') || null, confirm: null }); },
 
-    'save-info': function (c, form, fd) {
-      var debts = [];
-      for (var i = 0; i < 3; i++) {
-        var name = String(fd.get('d' + i + 'name') || '').trim();
-        if (!name) continue;
-        // 원금균등 상환 방식·월 원금 같은 화면에 없는 필드는 같은 이름의 기존 부채에서 이어받는다.
-        var prev = (c.state.customer.debts || []).filter(function (d) { return d.name === name; })[0] || {};
-        debts.push(Object.assign({}, prev, { name: name, balance: num(fd, 'd' + i + 'balance'), rate: num(fd, 'd' + i + 'rate') / 100, monthlyPayment: num(fd, 'd' + i + 'pay') }));
-      }
-      var patch = {
-        name: String(fd.get('name') || '').trim(),
-        birth: fd.get('birth') || '',
-        firstJob: fd.get('firstJob') || '',
-        job: String(fd.get('job') || '').trim(),
-        companySize: fd.get('companySize'),
-        region: String(fd.get('region') || '').trim(),
-        grossPrevYear: num(fd, 'grossPrevYear'),
-        netMonthly: num(fd, 'netMonthly'),
-        taxExemption: { applied: fd.get('teApplied') === 'on', start: fd.get('teStart') || '', end: fd.get('teEnd') || '', monthlyEffect: num(fd, 'teEffect') },
-        cash: num(fd, 'cash'), emergency: num(fd, 'emergency'), housing: num(fd, 'housing'), investment: num(fd, 'investment'), pension: num(fd, 'pension'),
-        depositReturn: { amount: num(fd, 'drAmount'), month: fd.get('drMonth') || '' },
-        debts: debts,
-        goal: { depositTarget: num(fd, 'gDeposit'), movingCost: num(fd, 'gMoving'), emergencyTarget: num(fd, 'gEmergency') }
-      };
-      var r = St.updateCustomer(c.state, patch, '고객', LABELS);
-      if (!r.changed.length) { ui.toast('바뀐 내용이 없어요.'); return; }
-      ui.commit(r.state, '내 정보를 저장했어요(' + r.changed.length + '개 항목).');
-    },
-
     'save-risk': function (c, form, fd) {
       var answers = {};
       P.risk.QUESTIONS.forEach(function (q) { if (fd.get(q.id) !== null) answers[q.id] = Number(fd.get(q.id)); });
@@ -201,19 +160,6 @@
       a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
       ui.toast('내보냈어요. 다운로드 폴더를 확인하세요.');
-    },
-
-    'import-json': function (c, el) {
-      var f = el.files && el.files[0];
-      if (!f) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        var r = St.importJSON(String(reader.result));
-        if (!r.ok) { ui.toast(r.errors[0]); return; }
-        ui.commit(r.state, '불러왔어요.');
-      };
-      reader.onerror = function () { ui.toast('파일을 읽지 못했어요. 다시 시도해 주세요.'); };
-      reader.readAsText(f, 'utf-8');
     }
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

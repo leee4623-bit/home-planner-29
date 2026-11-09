@@ -79,8 +79,8 @@
       ui.kpi('확인 대기 수정안', '<span class="num">' + pendingRev + '<small>건</small></span>') +
       '</section>' +
       '<section class="cols-2"><div class="card"><h2>기본정보</h2>' + ui.table(['항목', '값'], [
-        ['이름', k.name], ['나이', age === null ? '—' : '만 ' + age + '세(' + k.birth + ' 출생)'], ['직업·회사', k.job + ' · ' + k.companySize],
-        ['지역', k.region], ['최초 취업', k.firstJob], ['월 실수령', fmt.num1(k.netMonthly) + '만원'], ['직전연도 총급여', fmt.num1(k.grossPrevYear) + '만원']
+        ['이름', k.name], ['나이', k.age ? '만 ' + k.age + '세' : age === null ? '—' : '만 ' + age + '세(' + k.birth + ' 출생)'], ['직업·회사', k.job + ' · ' + k.companySize],
+        ['가구', k.household || '—'], ['재직', k.tenure ? k.tenure + '년 차' : (k.firstJob || '—')], ['월 실수령', fmt.num1(k.netMonthly) + '만원'], ['직전연도 총급여', fmt.num1(k.grossPrevYear) + '만원']
       ], { caption: '기본정보' }) + '</div>' +
       '<div class="card"><h2>목표</h2>' + ui.table(['항목', '값'], [
         ['이사 예정월(실행 기준)', c.d.plan.targetMonth],
@@ -132,22 +132,22 @@
   pages.info = function (c) {
     var k = c.state.customer;
     var plan = c.d.plan;
-    var since = (c.state.changeLog || []).filter(function (e) { return /^내 정보 변경/.test(e.what) && e.at >= (plan.date || ''); });
+    var since = (c.state.changeLog || []).filter(function (e) { return /^(내 정보 변경|고객정보 수정)/.test(e.what) && e.at >= (plan.date || ''); });
     var te = k.taxExemption || {};
     var issues = c.d.issues;
-    var rows = INFO_ROWS.map(function (r) { return [r[1], show(k[r[0]])]; }).concat([
+    var rows = INFO_ROWS.map(function (r) { return [r[1], (k.unknown || []).indexOf(r[0]) >= 0 ? '미확인' : show(k[r[0]])]; }).concat([
       ['소득세 감면', te.applied ? te.start + ' ~ ' + te.end + ' (종료 후 −' + fmt.short(te.monthlyEffect) + '만원)' : '미적용'],
       ['보증금 반환', k.depositReturn ? fmt.num1(k.depositReturn.amount) + '만원 · ' + k.depositReturn.month : '—'],
       ['목표 보증금 / 이사비 / 비상금', show(k.goal.depositTarget) + ' / ' + show(k.goal.movingCost) + ' / ' + show(k.goal.emergencyTarget)]
     ]);
     var debts = (k.debts || []).map(function (d) { return [d.name, ui.n1(d.balance), { html: fmt.short(d.rate * 100) + '%' }, d.method === 'equalPrincipal' ? '원금균등(월 원금 ' + fmt.short(d.monthlyPrincipal) + ')' : '원리금균등', ui.n1(d.monthlyPayment), d.rate >= c.d.current.input.assumptions.highRateThreshold ? { html: ui.badge('고금리', 'warn') } : '저금리']; });
-    return ui.pageHead('고객 정보·목표', '고객이 입력한 값입니다. 설계사는 조회만 할 수 있습니다.',
-      '<button class="btn btn-primary" data-action="planner-latest-version">최신 정보로 새 안 작성</button>') +
+    return ui.pageHead('고객 정보·목표', '첫 화면에서 입력한 고객정보입니다. 수정하면 두 화면 결과가 함께 다시 계산됩니다.',
+      '<button class="btn" data-action="edit-info">고객정보 수정</button> <button class="btn btn-primary" data-action="planner-latest-version">최신 정보로 새 안 작성</button>') +
       '<section class="card"><h2>입력 검증 ' + (issues.length ? ui.badge(issues.length + '건', issues.some(function (i) { return i.level === 'error'; }) ? 'bad' : issues.some(function (i) { return i.level === 'warn'; }) ? 'warn' : 'info') : ui.badge('이상 없음', 'ok')) + '</h2>' +
       (issues.length ? ui.table(['수준', '내용'], issues.map(function (i) { return [{ html: ui.badge(i.level === 'error' ? '오류' : i.level === 'warn' ? '주의' : '참고', i.level === 'error' ? 'bad' : i.level === 'warn' ? 'warn' : 'info') }, { html: ui.esc(i.message), cls: 'l' }]; }), { caption: '입력 검증' }) : '') + '</section>' +
       '<section class="card"><h2>실행 기준 계획 작성(' + ui.esc(plan.date || '') + ') 이후 바뀐 정보</h2>' +
       (since.length ? ui.table(['날짜', '누가', '항목', '이전', '이후'], since.map(function (e) {
-        return [e.at, e.who, e.what.replace('내 정보 변경: ', ''), { html: ui.esc(show(e.detail && e.detail.before)), cls: 'l' }, { html: ui.esc(show(e.detail && e.detail.after)), cls: 'l' }];
+        return [e.at, e.who, e.what.replace('내 정보 변경: ', '').replace('고객정보 수정: ', ''), { html: ui.esc(show(e.detail && e.detail.before)), cls: 'l' }, { html: ui.esc(show(e.detail && e.detail.after)), cls: 'l' }];
       }), { caption: '바뀐 정보' }) + '<p class="small muted">계산은 항상 최신 고객 정보를 씁니다. 바뀐 정보를 반영한 안을 고객에게 다시 제시하려면 [최신 정보로 새 안 작성]을 누르세요.</p>'
         : '<p class="muted">계획 작성 이후 바뀐 고객 정보가 없습니다.</p>') + '</section>' +
       '<section class="cols-2"><div class="card"><h2>고객 정보</h2>' + ui.table(['항목', '값'], rows, { caption: '고객 정보' }) + '</div>' +

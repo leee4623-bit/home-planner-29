@@ -102,6 +102,7 @@
 
       '<section class="card" aria-labelledby="home-todo"><div class="card-head"><h2 id="home-todo">이번 달 할 일 · ' + ui.ymText(c.d.month) + '</h2>' +
       (c.d.thisMonth.recordStatus ? ui.badge(c.d.thisMonth.recordStatus) : ui.badge('아직 확인 안 됨')) + '</div>' + checklist(c) + '</section>' +
+      '<section class="card" aria-labelledby="home-budget"><h2 id="home-budget">이번 달 계획과 실제 · ' + ui.ymText(c.d.month) + '</h2>' + ui.budgetChart(c, c.d.month) + '</section>' +
       proposalCard(c);
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

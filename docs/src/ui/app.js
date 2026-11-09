@@ -14,7 +14,8 @@
     store: null,
     state: null,
     d: null,
-    view: { role: 'customer', tab: 'home', more: null, recordMonth: null, confirm: null, tx: null, plannerPage: 'overview' }
+    // screen: 'intake'(고객정보 입력) → 'choose'(고객용·설계사용 선택) → 'main'(각 화면)
+    view: { screen: 'choose', role: 'customer', tab: 'home', more: null, recordMonth: null, confirm: null, tx: null, plannerPage: 'overview' }
   });
 
   /* ---------- 화면 위치 기억(개인 편의, 실패해도 무관) ---------- */
@@ -73,6 +74,8 @@
   }
 
   function ctx() {
+    // 고객정보 입력 전(상태 없음)에는 계산 없이 화면 정보만 넘긴다
+    if (!app.state) return { state: null, d: null, view: app.view, P: P, ui: ui, fmt: P.format, dates: dates };
     if (!app.d) app.d = derive(app.state);
     return { state: app.state, d: app.d, view: app.view, P: P, ui: ui, fmt: P.format, dates: dates };
   }
@@ -121,12 +124,16 @@
     app.d = null;
     app.view.confirm = null;
     render();
+    if (!saved.ok) {
+      // 저장 실패를 성공처럼 알리지 않는다
+      ui.toast('저장하지 못했어요. 화면에는 반영됐지만 창을 닫으면 사라집니다. 내보내기(JSON)로 보관하세요.');
+      return;
+    }
     var fresh = r.created.filter(function (id) {
       var a = s.alerts.filter(function (x) { return x.id === id; })[0];
       return a && notifyAllowed(s, a.type);
     });
     if (fresh.length && !inQuietHours(s)) msg = (msg ? msg + ' ' : '') + '새 알림 ' + fresh.length + '건이 있어요.';
-    if (saved.mode === 'memory') msg = (msg ? msg + ' ' : '') + '(이 브라우저에는 저장되지 않아요. 더보기에서 내보내기로 보관하세요.)';
     ui.toast(msg);
   };
 
@@ -143,14 +150,15 @@
     var j = c.d.current.judgement;
     var role = c.view.role;
     return '<header class="topbar"><div class="topbar-inner">' +
-      '<div class="brand">재무플래너</div>' +
+      '<button class="brand" data-action="go-choose" aria-label="재무플래너 — 화면 선택으로">재무플래너</button>' +
       '<div class="seg" role="group" aria-label="화면 전환">' +
-      '<button data-action="role" data-role="planner" aria-pressed="' + (role === 'planner') + '">설계사 화면</button>' +
-      '<button data-action="role" data-role="customer" aria-pressed="' + (role === 'customer') + '">고객 화면</button></div>' +
-      '<div class="context-line"><span>고객 <strong>' + ui.esc(s.customer.name || '이름 없음') + '</strong></span>' +
+      '<button data-action="role" data-role="customer" aria-pressed="' + (role === 'customer') + '">고객용</button>' +
+      '<button data-action="role" data-role="planner" aria-pressed="' + (role === 'planner') + '">설계사용</button></div>' +
+      '<button class="btn btn-sm edit-info" data-action="edit-info">고객정보 수정</button>' +
+      '<div class="context-line"><span>고객 <strong>' + ui.esc(s.customer.name || '이름 없음') + '</strong>' + (s.customer.isExample ? ' ' + ui.badge('가상 고객', 'info') : '') + '</span>' +
       '<span>실행 기준 <strong>' + ui.esc(c.d.plan ? c.d.plan.name : '없음') + '</strong></span>' +
       '<span>' + ui.judgementBadge(j) + '</span></div>' +
-      '</div><div class="demo-note">시연 모드 · 가상 고객 데이터입니다. 실제 금융정보를 입력하지 마세요.</div></header>';
+      '</div><div class="demo-note">' + (s.customer.isExample ? '가상 고객 데이터(설계 예시)입니다. 실제 금융정보가 아닙니다.' : '이 기기의 브라우저에만 저장돼요. 다른 기기와 자동으로 공유되지 않아요.') + '</div></header>';
   }
 
   function footer(c) {
@@ -196,29 +204,44 @@
     var el = document.getElementById('app');
     if (!el) return;
     var c;
+    if (ui.chartReset) ui.chartReset();
     try {
+      if (!app.state || app.view.screen === 'intake') {
+        if (!app.state) app.view.intakeMode = 'new';
+        el.className = 'intake-view';
+        el.innerHTML = ui.intakeScreen();
+        return;
+      }
       c = ctx();
+      if (app.view.screen === 'choose') {
+        el.className = 'choose-view';
+        el.innerHTML = ui.chooseScreen(c) + footer(c);
+        if (ui.mountCharts) ui.mountCharts();
+        return;
+      }
       el.className = (c.view.role === 'customer' ? 'customer-view' : 'planner-view') + (c.view.tour !== null && c.view.tour !== undefined ? ' tour-on' : '');
-      el.innerHTML = header(c) + staleNotice() + (c.view.role === 'customer' ? customerView(c) : plannerView(c)) + footer(c) + (ui.tourPanel ? ui.tourPanel(c) : '');
+      el.innerHTML = header(c) + staleNotice() + (ui.importConfirm ? ui.importConfirm() : '') + (ui.reviewBanner ? '<div class="review-wrap">' + ui.reviewBanner(c) + '</div>' : '') +
+        (c.view.role === 'customer' ? customerView(c) : plannerView(c)) + footer(c) + (ui.tourPanel ? ui.tourPanel(c) : '');
+      if (ui.mountCharts) ui.mountCharts();
     } catch (e) {
       if (root.console) root.console.error(e);
       el.className = '';
-      el.innerHTML = '<main class="customer-main">' + ui.errorBox('화면을 그리는 중 문제가 생겼어요. 다시 시도하거나 시연 데이터로 초기화해 주세요.') + '</main>';
+      el.innerHTML = '<main class="customer-main">' + ui.errorBox('화면을 그리는 중 문제가 생겼어요. 다시 시도하거나 설계 예시로 되돌려 주세요.') + '</main>';
     }
   }
   ui.render = render;
 
   /* ---------- 공통 동작 ---------- */
   Object.assign(ui.actions, {
-    role: function (c, el) { ui.setView({ role: el.getAttribute('data-role') }); },
+    role: function (c, el) { ui.setView({ role: el.getAttribute('data-role'), screen: 'main' }); },
     tab: function (c, el) { ui.setView({ tab: el.getAttribute('data-tab'), more: null, confirm: null }); },
     retry: function () { app.d = null; render(); },
-    'reset-demo-confirm': function () { ui.setView({ confirm: 'reset-demo', role: 'customer', tab: 'more', more: 'data' }); },
+    'reset-demo-confirm': function () { ui.setView({ screen: 'main', confirm: 'reset-demo', role: 'customer', tab: 'more', more: 'data' }); },
     'reset-demo': function () {
       var s = app.store.reset();
       app.staleDemo = false;
       app.view.tx = null;
-      ui.commit(s, '시연 데이터로 되돌렸어요.');
+      ui.commit(s, '설계 예시로 되돌렸어요.');
     },
     'cancel-confirm': function () { ui.setView({ confirm: null }, true); }
   });
@@ -261,15 +284,23 @@
     app.store = P.store.createStore();
     var loaded = app.store.load();
     var s = loaded.state;
-    s = P.alerts.syncAlerts(s).state;
-    app.state = s;
-    app.store.save(s);
     app.firstVisit = loaded.firstVisit;
     app.staleDemo = !!loaded.staleDemo;
     loadView();
+    if (s) {
+      s = P.alerts.syncAlerts(s).state;
+      app.state = s;
+      app.store.save(s); // 예전 저장본은 이전된 형식으로 다시 저장(삭제하지 않음)
+      app.view.screen = 'choose'; // 다시 실행하면 저장한 고객정보로 화면 선택부터
+    } else {
+      app.state = null;
+      app.view.screen = 'intake'; // 처음 실행: 고객정보 입력부터
+      app.view.intakeMode = 'new';
+      if (loaded.corrupt) setTimeout(function () { ui.toast('저장된 데이터를 읽지 못했어요. 지우지 않고 백업해 두었어요. 새로 입력하거나 파일을 불러오세요.'); }, 0);
+    }
     bindEvents();
     render();
-    if (app.store.mode === 'memory') ui.toast('이 브라우저에는 저장할 수 없어 이번 창에서만 유지돼요.');
+    if (app.store.mode === 'memory') ui.toast('이 브라우저에는 저장할 수 없어 이번 창에서만 유지돼요. 내보내기(JSON)로 보관하세요.');
     // 서비스 워커는 https에서만(파일로 열면 등록하지 않음)
     if (root.location && root.location.protocol === 'https:' && root.navigator && root.navigator.serviceWorker) {
       try { root.navigator.serviceWorker.register('sw.js'); } catch (e) { /* 무시 */ }

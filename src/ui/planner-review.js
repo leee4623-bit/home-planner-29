@@ -34,6 +34,8 @@
     };
     var dev = p.deviation || { essential: 0, optional: 0, debt: 0, months: [] };
     return ui.pageHead('실행 기록·예측', '고객이 기록한 값입니다(설계사는 조회만). 계획/실제 · 예정일 + 유예기간이 지나야 미달로 봅니다.') +
+      '<section class="cols-2"><div class="card"><h2>' + ui.esc(ui.ymText(c.d.month)) + ' 월 예산 비교</h2>' + ui.budgetChart(c, c.d.month) + '</div>' +
+      '<div class="card"><h2>주거자금 진행(기록 반영)</h2>' + ui.housingChart(c, { compareKey: 'cmpBeforeEx' }) + '</div></section>' +
       '<section class="card"><h2>실행 원장</h2>' + ui.table(headers, rows, { caption: '실행 원장' }) +
       '<p class="small muted">생활비 판정은 필수+선택 합계 기준이며, 항목별 값은 참고 숫자입니다.</p></section>' +
       '<section class="card"><h2>이사월(' + ui.esc(tm) + ') 예측</h2>' + ui.table(['가정', '이사 때 쓸 돈', '비상금', '고금리 부채', '판정'], [

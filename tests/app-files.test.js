@@ -65,9 +65,31 @@ function bootApp() {
 const BAD = /undefined|NaN|\[object Object\]|Infinity/;
 function text(html) { return html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/g, ' '); }
 
+test('처음 실행하면 고객정보 입력 화면이 먼저 나온다(설계 예시 버튼 포함)', () => {
+  const { target } = bootApp();
+  assert.match(target.className, /intake-view/);
+  assert.match(target.innerHTML, /고객정보 입력/);
+  assert.match(target.innerHTML, /설계 예시 불러오기/);
+  for (const sec of ['기본정보', '소득과 지출', '자산과 부채', '목표와 선호']) assert.ok(target.innerHTML.includes(sec), sec);
+  assert.ok(!BAD.test(text(target.innerHTML)));
+});
+
 test('모든 고객·설계사 화면을 그려도 오류 화면이 없고 개발용 값이 노출되지 않는다', () => {
   const { P, target } = bootApp();
   const ui = P.ui;
+  // 설계 예시로 입력을 마친 상태에서 화면 선택 → 각 화면
+  ui.app.state = P.alerts.syncAlerts(P.intake.buildState(P.intake.exampleValues(), 'example').state).state;
+  ui.app.d = null;
+  ui.setView({ screen: 'choose' });
+  assert.match(target.innerHTML, /고객용 화면/);
+  assert.match(target.innerHTML, /설계사용 화면/);
+  assert.match(target.innerHTML, /가상 고객 데이터/);
+  ui.app.view.screen = 'main';
+  // 고객정보 수정 화면(같은 입력 화면)
+  ui.openIntake('edit');
+  assert.match(target.innerHTML, /고객정보 수정/);
+  assert.match(target.innerHTML, /value="320"/);
+  ui.app.view.screen = 'main';
   const views = [];
   for (const tab of ['home', 'record', 'plan', 'alerts']) views.push({ role: 'customer', tab });
   for (const more of [null, 'info', 'risk', 'products', 'data', 'install']) views.push({ role: 'customer', tab: 'more', more });

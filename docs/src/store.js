@@ -10,8 +10,10 @@
   var isNode = typeof module !== 'undefined' && module.exports;
   var dates = isNode ? require('./dates.js') : root.Planner.dates;
   var demo = isNode ? require('../data/demo.js') : root.Planner.demo;
+  var intake = isNode ? require('./intake.js') : root.Planner.intake;
 
   var STORAGE_KEY = 'jaemu-planner';
+  var BACKUP_KEY = 'jaemu-planner-corrupt-backup';
   var SCHEMA_VERSION = 1;
 
   var RECORD_ITEMS = {
@@ -61,7 +63,7 @@
     s.settings = s.settings || {};
     s.records.forEach(function (r) { if (!r.status) r.status = '확정'; }); // 상태가 없던 기록은 확정으로 본다
     if (!s.activePlanId && s.plans && s.plans.length) s.activePlanId = s.plans[s.plans.length - 1].id;
-    return s;
+    return intake.migrateIntake(s); // 예전 저장본: 입력 완료 표시를 붙여 그대로 이어서 쓴다
   }
 
   /* ---------- 저장소 ---------- */
@@ -93,7 +95,10 @@
       get mode() { return mode; },
       get lastError() { return lastError; },
 
-      /** 저장된 상태를 읽는다. 없거나 깨졌으면 시연 데이터. { state, source:'saved'|'demo'|'memory', firstVisit } */
+      /**
+       * 저장된 상태를 읽는다. { state, source:'saved'|'empty'|'memory', firstVisit, corrupt }
+       * 저장값이 없으면 state=null(첫 실행 → 고객정보 입력 화면). 깨진 저장값은 지우지 않고 백업 키에 옮겨 둔다.
+       */
       load: function () {
         if (mode === 'storage') {
           try {
@@ -101,6 +106,10 @@
             if (raw) {
               var parsed = JSON.parse(raw);
               var checked = checkShape(parsed);
+              if (!checked.ok) {
+                try { if (!backend.getItem(BACKUP_KEY)) backend.setItem(BACKUP_KEY, raw); } catch (e2) { /* 무시 */ }
+                return { state: memory ? clone(memory) : null, source: memory ? 'memory' : 'empty', firstVisit: !memory, corrupt: true };
+              }
               if (checked.ok) {
                 var cur = demo.getDemo().demoVersion;
                 // 시연 데이터에서 시작한 저장본인데 시연 데이터가 새로 바뀌었으면 알려 준다(덮어쓰지는 않음)
@@ -109,29 +118,39 @@
               }
             }
           } catch (e) {
+            if (e instanceof SyntaxError) {
+              // 읽기는 됐지만 JSON이 깨짐: 지우지 않고 백업해 둔다
+              try { var r0 = backend.getItem(STORAGE_KEY); if (r0 && !backend.getItem(BACKUP_KEY)) backend.setItem(BACKUP_KEY, r0); } catch (e3) { /* 무시 */ }
+              if (memory) return { state: clone(memory), source: 'memory', firstVisit: false };
+              return { state: null, source: 'empty', firstVisit: true, corrupt: true };
+            }
             fail(e);
           }
         }
         if (memory) return { state: clone(memory), source: 'memory', firstVisit: false };
-        return { state: migrate(demo.getDemo()), source: 'demo', firstVisit: true };
+        return { state: null, source: 'empty', firstVisit: true };
       },
 
-      /** { ok, mode } — 브라우저 저장에 실패해도 메모리에는 남는다 */
+      /**
+       * { ok, mode, error } — ok는 이 기기 저장소에 실제로 썼을 때만 true.
+       * 실패해도 이번 창(메모리)에는 남기지만 성공으로 알리지 않는다.
+       */
       save: function (state) {
         memory = clone(state);
         if (mode === 'storage') {
           try {
             backend.setItem(STORAGE_KEY, JSON.stringify(state));
+            return { ok: true, mode: mode };
           } catch (e) {
             fail(e);
           }
         }
-        return { ok: true, mode: mode };
+        return { ok: false, mode: mode, error: lastError || '이 브라우저에는 저장할 수 없습니다.' };
       },
 
-      /** 시연 데이터로 초기화 */
+      /** 설계 예시(가상 고객)로 초기화 */
       reset: function () {
-        var s = migrate(demo.getDemo());
+        var s = migrate(intake.buildState(intake.exampleValues(), 'example').state);
         this.save(s);
         return s;
       },
@@ -474,6 +493,7 @@
 
   var api = {
     STORAGE_KEY: STORAGE_KEY,
+    BACKUP_KEY: BACKUP_KEY,
     updateCustomer: updateCustomer,
     addScheduledPayment: addScheduledPayment,
     removeScheduledPayment: removeScheduledPayment,

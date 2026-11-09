@@ -30,33 +30,6 @@
     return bad.join(', ') + (j.status === '부분 충족' ? '이 남지만 이사 자금은 충분해요.' : '이 모자라요.');
   }
 
-  function chart(c) {
-    var d = c.d;
-    var pts = function (rows) { return rows.map(function (r) { return { month: r.month, value: r.usable }; }); };
-    var series = [];
-    if (d.before) series.push({ key: 'before', label: '설계 전 예상', color: '--chart-before', dashed: true, points: pts(d.before.rows) });
-    series.push({ key: 'plan', label: '설계 후 예상', color: '--chart-plan', dashed: true, points: pts(d.paths.plan.rows) });
-    series.push({ key: 'actual', label: '실제 실행(확정 기록)', color: '--chart-actual', dots: true, points: d.paths.actual.map(function (a) { return { month: a.month, value: a.usable }; }) });
-    if (d.paths.lastConfirmed) {
-      var from = d.paths.lastConfirmed;
-      series.push({ key: 'trend', label: '최근 추세가 이어지면', color: '--chart-trend', dashed: true,
-        points: d.paths.trend.rows.filter(function (r) { return r.month >= from; }).map(function (r) { return { month: r.month, value: r.usable }; }) });
-    }
-    var goal = d.current.input.goal;
-    var seen = {};
-    var events = d.current.events.filter(function (e) {
-      if (EVENT_TYPES.indexOf(e.type) < 0 || seen[e.type + e.month]) return false;
-      seen[e.type + e.month] = true;
-      return true;
-    }).sort(function (a, b) { return a.month < b.month ? -1 : 1; });
-    return ui.fundChart({
-      title: '사용 가능 주거자금 경로',
-      series: series,
-      target: { value: goal.depositTarget + goal.movingCost, label: '목표 ' + fmt.short(goal.depositTarget + goal.movingCost) },
-      events: events
-    });
-  }
-
   /** 제안 적용 시 결과(기록 반영 기준, 지금 실행 기준 위에 얹어서 계산). proposal 없으면 지금 계획 그대로. */
   function previewOf(c, proposal, option) {
     var eff = proposal ? St.effectiveChanges(c.state, proposal, option) : { basePlanId: c.state.activePlanId, planChanges: {}, goalChanges: {} };
@@ -173,8 +146,9 @@
       '<p class="conclusion">' + ui.esc(easySentence(j)) + '</p>' +
       ui.fold('세 가지 조건 자세히', judgementDetail(j, c.d.current.input)) + '</section>' +
       ui.modelsCard(c) +
-      '<section class="card" aria-labelledby="plan-c"><h2 id="plan-c">자금 경로 ' + ui.help('사용 가능 주거자금') + '</h2>' + chart(c) +
-      '<p class="small muted">점선은 예상, 실선과 점은 확인한 기록이에요. 기록이 없는 달은 선을 끊어요. ' + ui.help('최근 추세') + '</p></section>' +
+      '<section class="card" aria-labelledby="plan-c"><h2 id="plan-c">주거자금 진행 ' + ui.help('사용 가능 주거자금') + '</h2>' + ui.housingChart(c) +
+      '<p class="small muted">확정 기록까지 반영하고, 그 뒤는 계획대로 간다고 본 예상이에요.</p></section>' +
+      '<section class="card" aria-labelledby="plan-ba"><h2 id="plan-ba">설계 전·후 목표 비교</h2>' + ui.beforeAfterChart(c) + '</section>' +
       (cards || '<section class="card"><h2>제안·수정안</h2>' + ui.empty('지금 확인할 제안이 없어요.') + '</section>') +
       (done.length ? '<section class="card"><h2>적용한 제안</h2><ul class="rows">' + done.map(function (p) {
         return '<li><div class="row-main"><div class="t">' + ui.esc(p.title) + '</div><div class="s">' + ui.esc(p.appliedAt || '') + ' · ' + ui.esc(p.appliedBy || '') + (p.chosenKey ? ' · ' + ui.esc(p.chosenKey) + '안' : '') + '</div></div><div class="row-side">' + ui.badge('적용됨') + '</div></li>';
