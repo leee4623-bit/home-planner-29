@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>재무플래너</title>
+  <meta name="description" content="설계사가 주거자금 계획을 제시하고 고객이 선택한 뒤 매달 실행을 기록·점검하는 재무설계 앱(시연용, 가상 데이터)">
+  <meta name="theme-color" content="#1d5fd1">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script>
+    // 웹 주소(http/https)로 열 때만 설치 정보를 붙인다. 파일로 열면(file://) 브라우저가 읽지 못해 오류만 남기 때문.
+    if (/^https?:$/.test(location.protocol)) {
+      var m = document.createElement('link'); m.rel = 'manifest'; m.href = 'manifest.webmanifest'; document.head.appendChild(m);
+    }
+  </script>
+</head>
+<body>
+  <a class="sr-only" href="#main">본문으로 건너뛰기</a>
+  <div id="app">
+    <main class="customer-main" aria-busy="true">
+      <div class="card"><div class="skeleton" style="width:60%"></div><div class="skeleton"></div><div class="skeleton" style="width:80%"></div></div>
+      <div class="card"><div class="skeleton"></div><div class="skeleton" style="width:70%"></div></div>
+      <noscript><p>이 앱은 자바스크립트가 필요합니다. 브라우저 설정에서 켜 주세요.</p></noscript>
+    </main>
+  </div>
+  <div id="toast" class="toast-wrap" aria-live="polite"></div>
+
+  <!-- 계산(순수 함수) — 순서 중요 -->
+  <script src="src/dates.js"></script>
+  <script src="src/format.js"></script>
+  <script src="data/policies.js"></script>
+  <script src="data/products.js"></script>
+  <script src="src/policy.js"></script>
+  <script src="src/judge.js"></script>
+  <script src="src/engine.js"></script>
+  <script src="src/metrics.js"></script>
+  <script src="src/validate.js"></script>
+  <script src="src/scenarios.js"></script>
+  <script src="src/solver.js"></script>
+  <script src="src/risk.js"></script>
+  <script src="data/demo.js"></script>
+  <script src="src/store.js"></script>
+  <script src="src/tracking.js"></script>
+  <script src="src/alerts.js"></script>
+  <script src="src/csv.js"></script>
+  <script src="src/proposals.js"></script>
+  <script src="src/models.js"></script>
+  <script src="tests/cases.js"></script>
+  <!-- 화면 -->
+  <script src="src/ui/components.js"></script>
+  <script src="src/ui/chart.js"></script>
+  <script src="src/ui/customer-home.js"></script>
+  <script src="src/ui/customer-record.js"></script>
+  <script src="src/ui/customer-plan.js"></script>
+  <script src="src/ui/customer-alerts.js"></script>
+  <script src="src/ui/customer-more.js"></script>
+  <script src="src/ui/planner-shell.js"></script>
+  <script src="src/ui/planner-diagnosis.js"></script>
+  <script src="src/ui/planner-design.js"></script>
+  <script src="src/ui/planner-review.js"></script>
+  <script src="src/ui/tour.js"></script>
+  <script src="src/ui/app.js"></script>
+</body>
+</html>

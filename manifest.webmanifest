@@ -1,0 +1,16 @@
+{
+  "name": "재무플래너 — 주거자금 설계",
+  "short_name": "재무플래너",
+  "description": "설계사가 주거자금 계획을 제시하고 고객이 선택한 뒤 매달 실행을 기록·점검하는 재무설계 앱(시연용, 가상 데이터)",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1d5fd1",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
