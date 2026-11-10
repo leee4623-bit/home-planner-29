@@ -307,6 +307,9 @@ details.help > div {
 table.data { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.88rem; }
 table.data th, table.data td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
 table.data th:first-child, table.data td:first-child { text-align: left; }
+/* 맨 앞 열(항목 이름): 한 글자씩 끊기지 않게 최소 너비를 두고 단어 단위로만 줄바꿈 */
+table.data th, table.data td { overflow-wrap: normal; word-break: keep-all; }
+table.data th:first-child, table.data td:first-child { min-width: 8.5em; max-width: 13em; white-space: normal; line-height: 1.45; }
 table.data td.l, table.data th.l { text-align: left; white-space: normal; }
 table.data thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); font-weight: 700; color: var(--muted); }
 table.data tbody tr:hover td { background: var(--surface-2); }
