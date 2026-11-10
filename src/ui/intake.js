@@ -28,7 +28,7 @@
     var v = values[f.key] === undefined || values[f.key] === null ? '' : String(values[f.key]);
     var err = errors[f.key];
     var desc = [];
-    if (f.hint) desc.push(id + '-h');
+    if (f.hint || f.ex) desc.push(id + '-h');
     if (err) desc.push(id + '-e');
     var aria = (desc.length ? ' aria-describedby="' + desc.join(' ') + '"' : '') + (err ? ' aria-invalid="true"' : '') + (f.required ? ' aria-required="true"' : '');
     var ctl;
@@ -44,7 +44,7 @@
     if (f.unit) ctl = '<div class="input-unit">' + ctl + '<span class="unit" aria-hidden="true">' + esc(f.unit) + '</span></div>';
     return '<div class="field' + (err ? ' has-error' : '') + (extraCls ? ' ' + extraCls : '') + '">' +
       '<label for="' + id + '">' + esc(f.label) + (f.unit ? ' <span class="unit-l">(' + esc(f.unit) + ')</span>' : '') + ' ' + tag(f) + '</label>' + ctl +
-      (f.hint ? '<p class="hint" id="' + id + '-h">' + esc(f.hint) + '</p>' : '') +
+      (f.hint || f.ex ? '<p class="hint" id="' + id + '-h">' + esc(f.hint || '') + (f.ex ? '<span class="ex">' + (f.hint ? ' · ' : '') + '예: ' + esc(f.ex) + (f.unit && f.type !== 'text' ? esc(f.unit.replace(/\/.*/, '')) : '') + '</span>' : '') + '</p>' : '') +
       (err ? '<p class="err" id="' + id + '-e"><span aria-hidden="true">!</span> ' + esc(err) + '</p>' : '') + '</div>';
   }
 
@@ -65,7 +65,7 @@
         (err ? '<p class="err" id="' + id + '-e"><span aria-hidden="true">!</span> ' + esc(err) + '</p>' : '') + '</div>';
     }).join('');
     return '<fieldset class="living"><legend>월 생활비 <span class="req">필수(1개 이상)</span></legend>' +
-      '<p class="hint">항목마다 금액(만원/월)을 적고, 줄일 수 없는 지출은 ‘필수’에 표시하세요. 없는 항목은 0, 모르는 항목은 비워 두세요.</p>' +
+      '<p class="hint">한 달에 쓰는 돈을 항목마다 적어 주세요(단위 만원/월, 예: 식비 60). 줄이기 어려운 지출은 ‘필수’에 표시하세요. 없는 항목은 0, 모르는 항목은 비워 두세요(미확인).</p>' +
       rows + '<p class="lv-total" aria-live="polite">합계 <strong id="lv-sum">' + fmt.num1(total) + '</strong>만원/월' + (unknown ? ' <span class="muted">(미확인 ' + unknown + '개 제외)</span>' : '') + '</p></fieldset>';
   }
 
@@ -76,10 +76,11 @@
     if (key === 'income') body += livingTable(values, errors);
     if (key === 'assets') {
       var ds = I.FIELDS.filter(function (f) { return f.group === 'debt'; });
-      body += '<fieldset class="sub"><legend>부채 <span class="opt">선택</span></legend><p class="hint">부채가 없으면 잔액을 0으로 두세요. 잔액이 있으면 금리·기간이 필요해요.</p>' +
+      body += '<fieldset class="sub"><legend>대출 <span class="opt">선택</span></legend><p class="hint">대출이 없으면 잔액을 0으로 두세요. 잔액이 있으면 금리·남은 기간이 필요해요.</p>' +
         '<div class="fgrid">' + ds.map(function (f) { return field(f, values, errors); }).join('') + '</div></fieldset>';
     }
-    return '<section class="card intake-sec" aria-labelledby="sec-' + key + '"><h2 id="sec-' + key + '">' + esc(sec.title) + '</h2>' + body + '</section>';
+    return '<section class="card intake-sec" aria-labelledby="sec-' + key + '"><h2 id="sec-' + key + '">' + esc(sec.title) + '</h2>' +
+      (sec.note ? '<p class="notice info small"><span aria-hidden="true">i</span><span>' + esc(sec.note) + '</span></p>' : '') + body + '</section>';
   }
 
   function errorSummary(errors) {
@@ -94,40 +95,55 @@
 
   /* ---------- 입력 화면 ---------- */
 
+  // 입력 화면 모드: new(새 고객) · review(기존 정보 확인하고 계속하기) · edit(고객정보 수정)
+  var MODE = {
+    new: { title: '나의 재무상태 자가진단', submit: '자가진단 완료하고 시작하기',
+      lead: '내 상황을 직접 입력하는 화면이에요. 다 입력하고 아래 [자가진단 완료하고 시작하기]를 누르면 저장한 뒤 고객용·설계사용 화면을 고를 수 있어요.' },
+    review: { title: '나의 재무상태 자가진단 · 기존 정보 확인', submit: '확인하고 계속하기',
+      lead: '저장해 둔 정보예요. 내용을 확인하고(필요하면 고친 뒤) [확인하고 계속하기]를 누르면 화면 선택으로 넘어가요.' },
+    edit: { title: '고객정보 수정', submit: '수정 완료',
+      lead: '고친 정보로 진단과 전망을 다시 계산해요. 확정한 계획은 덮어쓰지 않고, 다시 볼 부분을 알려 드려요.' }
+  };
+
   ui.intakeScreen = function () {
     var a = app();
     var v = a.view;
-    var edit = v.intakeMode === 'edit';
-    var values = v.intakeDraft || (edit && a.state ? I.fromState(a.state) : I.emptyValues());
+    var mode = MODE[v.intakeMode] ? v.intakeMode : 'new';
+    var m = MODE[mode];
+    var prefill = mode !== 'new' && a.state;
+    var values = v.intakeDraft || (prefill ? I.fromState(a.state) : I.emptyValues());
     var errors = v.intakeErrors || {};
-    var source = v.intakeSource || (edit && a.state && a.state.intake ? a.state.intake.source : 'manual');
+    var source = v.intakeSource || (prefill && a.state.intake ? a.state.intake.source : 'manual');
     var example = source === 'example';
     var confirm = v.intakeConfirm
       ? '<div class="notice warn" role="alertdialog" aria-labelledby="ex-q"><div><p id="ex-q"><strong>이미 적은 내용이 있어요. 설계 예시로 바꿀까요?</strong> 지금 입력칸의 값이 예시 값으로 바뀝니다(아직 저장 전이라 저장된 정보는 그대로예요).</p>' +
         '<div class="btn-row"><button class="btn btn-danger" data-action="intake-example-yes">예시로 바꾸기</button><button class="btn" data-action="intake-example-no">취소</button></div></div></div>'
       : '';
     var saveErr = v.intakeSaveError
-      ? '<div class="notice bad" role="alert"><div><p><strong>저장하지 못했어요.</strong> 이 브라우저 저장소에 쓸 수 없습니다(' + esc(v.intakeSaveError) + '). 입력값은 그대로 남아 있어요.</p>' +
-        '<div class="btn-row"><button class="btn btn-primary" data-action="intake-retry-save">다시 저장</button><button class="btn" data-action="intake-continue-unsaved">저장 없이 이번 창에서만 계속</button></div>' +
-        '<p class="small muted">저장 없이 계속하면 창을 닫을 때 사라집니다. 더보기 → 데이터 관리의 내보내기(JSON)로 보관할 수 있어요.</p></div></div>'
+      ? '<div class="notice bad" role="alert"><div><p><strong>저장하지 못했어요. 아직 다음 화면으로 넘어가지 않았어요.</strong> 이 브라우저 저장소에 쓸 수 없습니다(' + esc(v.intakeSaveError) + '). 입력값은 그대로 남아 있어요.</p>' +
+        '<div class="btn-row"><button class="btn btn-primary" data-action="intake-retry-save">다시 저장</button></div>' +
+        '<p class="small muted">사생활 보호(시크릿) 모드이거나 저장 공간이 가득 찼을 수 있어요. 일반 창에서 다시 열거나 저장 공간을 비운 뒤 [다시 저장]을 눌러 주세요.</p></div></div>'
       : '';
-    return '<header class="topbar"><div class="topbar-inner"><div class="brand">재무플래너</div>' +
-      (edit ? '<button class="btn btn-sm" data-action="intake-cancel">수정 취소하고 돌아가기</button>' : '') + '</div>' +
+    var cancel = mode === 'edit' ? '<button class="btn btn-sm" data-action="intake-cancel">수정 취소</button>'
+      : a.state ? '<button class="btn btn-sm" data-action="go-welcome">처음 화면으로</button>' : '';
+    var newWithOld = mode === 'new' && a.state
+      ? '<div class="notice info"><span aria-hidden="true">i</span><p>새 고객 자가진단이에요. 기존 고객(' + esc((a.state.customer || {}).name || '') + ') 정보는 지우지 않았어요. 새 자가진단을 저장하면 기존 정보는 이 브라우저에 백업되고, 화면 선택 → 데이터에서 되돌릴 수 있어요.</p></div>'
+      : '';
+    return '<header class="topbar"><div class="topbar-inner"><div class="brand">재무플래너</div>' + cancel + '</div>' +
       '<div class="demo-note">' + (example ? '가상 고객 데이터(설계 예시)를 입력칸에 채웠어요. 실제 고객이 아닙니다.' : '입력한 정보는 이 기기의 브라우저에만 저장돼요. 다른 기기와 자동으로 공유되지 않아요.') + '</div></header>' +
       '<main class="intake-main" id="main">' + (ui.importConfirm ? ui.importConfirm() : '') +
-      '<section class="card intake-intro"><h1>' + (edit ? '고객정보 수정' : '고객정보 입력') + '</h1>' +
-      '<p>' + (edit ? '고친 정보로 고객용·설계사용 화면의 결과가 함께 다시 계산됩니다. 설계안의 수동 조정값은 바꾸지 않고, 다시 볼 부분을 알려 드려요.'
-        : '먼저 고객정보를 한 페이지에 입력하고 저장하면, 고객용·설계사용 화면을 골라 결과를 볼 수 있어요.') + '</p>' +
-      '<ul class="legend-list small"><li><span class="req">필수</span> 꼭 입력 · <span class="opt">선택</span> 모르면 비워 두기</li><li>빈 칸은 <strong>미확인</strong>, 실제로 없으면 <strong>0</strong>을 입력 · 금액 단위는 만원</li></ul>' +
+      '<section class="card intake-intro"><h1 tabindex="-1">' + esc(m.title) + '</h1>' +
+      '<p>' + esc(m.lead) + '</p>' + newWithOld +
+      '<ul class="legend-list small"><li><span class="req">필수</span> 꼭 입력 · <span class="opt">선택</span> 모르면 비워 두기</li><li>빈 칸은 <strong>미확인</strong>, 실제로 없으면 <strong>0</strong>을 입력 · 금액 단위는 <strong>만원</strong>(100만원 → 100)</li></ul>' +
       '<div class="btn-row"><button class="btn" data-action="intake-example">설계 예시 불러오기</button>' +
-      (!edit ? '<label class="btn" for="import-file-intake">저장해 둔 파일 불러오기(JSON)</label><input id="import-file-intake" class="sr-only" type="file" accept=".json,application/json" data-change="import-json">' : '') + '</div>' +
-      (example ? '<div class="notice info"><span aria-hidden="true">i</span><p>설계 예시는 재무설계 사례 보고서의 <strong>가상 고객</strong> 초기 정보입니다(기준일 2026-11-03, 설계 시작월 2026-11 고정). 생활비 200·대출 700 상환·연금 월 10 같은 설계 내용은 넣지 않았고, 저장하면 보고서 설계안이 별도 계획 버전으로 붙습니다. 값은 고칠 수 있어요.</p></div>' : '') +
+      (mode === 'new' ? '<label class="btn" for="import-file-intake">저장해 둔 파일 불러오기(JSON)</label><input id="import-file-intake" class="sr-only" type="file" accept=".json,application/json" data-change="import-json">' : '') + '</div>' +
+      (example ? '<div class="notice info"><span aria-hidden="true">i</span><p><strong>가상 고객 예시</strong>예요. 공모전 사례 보고서의 가상 고객이 설계를 받기 <strong>전</strong> 정보입니다(기준일 2026-11-03, 설계 시작월 2026-11 고정). 생활비 200·대출 700 상환·연금 월 10 같은 개선안은 넣지 않았고, 저장하면 보고서 설계안이 별도 계획 버전으로 붙습니다. 값은 고칠 수 있어요.</p></div>' : '') +
       confirm + saveErr + errorSummary(errors) + '</section>' +
       '<form id="intake-form" data-submit="intake-save" novalidate>' +
       '<input type="hidden" name="_source" value="' + esc(source) + '">' +
-      '<div class="intake-grid">' + I.SECTIONS.map(function (s) { return section(s.key, values, errors); }).join('') + '</div>' +
-      '<p class="small muted intake-submit-note">' + (edit ? '수정 완료' : '입력 완료') + '를 누르면 필수값과 숫자 범위를 검사한 뒤 이 기기에 저장합니다.</p>' +
-      '<div class="intake-submit"><button class="btn btn-primary btn-block" type="submit">' + (edit ? '수정 완료' : '입력 완료') + '</button></div>' +
+      '<div class="intake-grid">' + I.SECTIONS.map(function (sec) { return section(sec.key, values, errors); }).join('') + '</div>' +
+      '<p class="small muted intake-submit-note">[' + esc(m.submit) + ']를 누르면 ① 필수 입력과 숫자 범위를 확인하고 ② 고객정보와 자가진단 응답을 이 기기에 저장한 뒤 ③ 저장에 성공했을 때만 화면 선택으로 넘어가요.</p>' +
+      '<div class="intake-submit"><button class="btn btn-primary btn-block" type="submit">' + esc(m.submit) + '</button></div>' +
       '</form></main>';
   };
 
@@ -162,7 +178,11 @@
   ui.openIntake = function (mode) {
     var a = app();
     a.view.intakeReturn = { screen: a.view.screen, role: a.view.role };
-    rerender({ screen: 'intake', intakeMode: mode, intakeDraft: null, intakeErrors: null, intakeConfirm: false, intakeSaveError: null, intakeSource: null });
+    // 새 자가진단을 쓰다가 닫았다면 그 내용을 다시 채운다(같은 모드일 때만)
+    var d = readJSON(DRAFT_KEY);
+    var draft = d && d.mode === mode && mode === 'new' ? d.values : null;
+    rerender({ screen: 'intake', intakeMode: mode, intakeDraft: draft, intakeErrors: null, intakeConfirm: false, intakeSaveError: null, intakeSource: draft ? d.source : null });
+    if (draft) ui.toast('작성하던 내용을 다시 채웠어요.');
   };
 
   function trySave(s, after) {
@@ -178,8 +198,19 @@
     return true;
   }
 
+  var PREV_KEY = 'jaemu-planner-previous';
+  var DRAFT_KEY = 'jaemu-planner-draft';
+
+  function readJSON(key) {
+    try { var raw = root.localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  ui.prevBackup = function () { return readJSON(PREV_KEY); };
+  function clearDraft() { try { root.localStorage.removeItem(DRAFT_KEY); } catch (e) { /* 무시 */ } }
+
   function finish(s, after) {
     var a = app();
+    clearDraft();
+    if (a.view.screen === 'intake') a.navReplacePrev = { screen: 'intake', intakeMode: 'review', role: a.view.role };
     a.state = s;
     a.d = null;
     a.pendingState = null;
@@ -223,41 +254,62 @@
       a.view.intakeDraft = values;
       a.view.intakeSource = source;
       a.view.intakeSaveError = null;
-      if (a.view.intakeMode === 'edit' && a.state) {
-        var who = a.view.role === 'planner' ? '설계사' : '고객';
+      var mode = a.view.intakeMode;
+      if ((mode === 'edit' || mode === 'review') && a.state) {
+        var who = mode === 'edit' && a.view.role === 'planner' ? '설계사' : '고객';
         var r = I.applyEdit(a.state, values, who);
         if (!r.ok) { rerender({ intakeErrors: r.errors }, true); focusFirstError(r.errors); return; }
+        var ret = a.view.intakeReturn || { screen: 'choose' };
+        var dest = mode === 'review' ? { screen: 'choose' } : { screen: ret.screen === 'intake' || ret.screen === 'welcome' || !ret.screen ? 'choose' : ret.screen, role: ret.role || a.view.role };
         if (!r.changed.length) {
-          var back = a.view.intakeReturn || { screen: 'choose' };
-          rerender({ screen: back.screen === 'intake' ? 'choose' : back.screen || 'choose', intakeDraft: null, intakeErrors: null });
-          ui.toast('바뀐 내용이 없어요.');
+          // 바뀐 것이 없어도 저장된 상태가 맞는지 다시 써 본다(저장 실패면 넘어가지 않음)
+          trySave(a.state, { view: dest, msg: mode === 'review' ? '기존 정보를 확인했어요.' : '바뀐 내용이 없어요.' });
           return;
         }
         var s = P.alerts.syncAlerts(r.state).state;
-        var ret = a.view.intakeReturn || { screen: 'choose' };
-        trySave(s, { view: { screen: ret.screen === 'intake' ? 'choose' : ret.screen || 'choose', role: ret.role || a.view.role }, msg: '고객정보를 저장했어요(' + r.changed.length + '개 항목). 두 화면 결과를 다시 계산했어요.' });
+        trySave(s, { view: dest, msg: '저장했어요(' + r.changed.length + '개 항목 변경). 진단과 전망을 다시 계산했어요.' });
         return;
       }
       var b = I.buildState(values, source);
       if (!b.ok) { rerender({ intakeErrors: b.errors }, true); focusFirstError(b.errors); return; }
       var s2 = St.migrate ? St.migrate(b.state) : b.state;
       s2 = P.alerts.syncAlerts(s2).state;
-      trySave(s2, { view: { screen: 'choose' }, msg: '저장했어요. 이 기기 브라우저에만 저장됩니다.' });
+      if (a.state) {
+        // 새 고객: 기존 정보를 지우지 않고 먼저 백업한다. 백업을 못 하면 저장하지 않는다.
+        try {
+          root.localStorage.setItem(PREV_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: a.state }));
+        } catch (e) {
+          rerender({ intakeSaveError: '기존 고객 정보를 백업하지 못해 새 정보로 바꾸지 않았어요' }, true);
+          return;
+        }
+      }
+      trySave(s2, { view: { screen: 'choose' }, msg: '자가진단을 저장했어요. 이 기기 브라우저에만 저장됩니다.' });
     },
     'intake-retry-save': function () {
       var a = app();
       if (a.pendingState) trySave(a.pendingState, a.pendingAfter);
     },
-    'intake-continue-unsaved': function () {
-      var a = app();
-      if (!a.pendingState) return;
-      var after = a.pendingAfter;
-      finish(a.pendingState, { view: after.view, msg: '저장하지 않고 계속해요. 창을 닫으면 입력이 사라집니다.' });
-    },
 
     /* 화면 선택 */
     'choose-role': function (c, el) { ui.setView({ screen: 'main', role: el.getAttribute('data-role') }); },
     'go-choose': function () { ui.setView({ screen: 'choose' }); },
+    'go-welcome': function () { rerender({ screen: 'welcome', intakeDraft: null, intakeErrors: null, intakeSaveError: null, intakeConfirm: false }); },
+    'continue-existing': function () { ui.openIntake('review'); },
+    'new-customer': function () { ui.openIntake('new'); },
+    'restore-prev-confirm': function () { ui.setView({ confirm: 'restore-prev' }, true); },
+    'restore-prev': function () {
+      var a = app();
+      var b = readJSON(PREV_KEY);
+      if (!b || !b.state) { ui.toast('되돌릴 이전 고객 정보가 없어요.'); return; }
+      var cur = a.state;
+      var saved = a.store.save(b.state);
+      if (!saved.ok) { ui.toast('저장하지 못해 되돌리지 않았어요.'); a.store.save(cur); return; }
+      try { root.localStorage.setItem(PREV_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: cur })); } catch (e) { /* 무시 */ }
+      a.state = b.state;
+      a.d = null;
+      rerender({ screen: 'choose', confirm: null });
+      ui.toast('이전 고객 정보로 되돌렸어요. 방금까지의 정보는 백업으로 바꿔 두었어요.');
+    },
     'edit-info': function () { ui.openIntake('edit'); },
     'start-over-confirm': function () { ui.setView({ confirm: 'start-over' }, true); },
     'start-over': function () {
@@ -277,10 +329,24 @@
     }
   });
 
-  // 생활비 합계를 입력하는 대로 보여 준다
+  // 생활비 합계를 입력하는 대로 보여 주고, 새 자가진단은 쓰는 중인 내용을 기기에 임시 저장한다
+  var draftTimer = null;
+  function saveDraftSoon() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(function () {
+      var a = app();
+      if (!a || a.view.screen !== 'intake' || a.view.intakeMode !== 'new') return;
+      var f = document.getElementById('intake-form');
+      if (!f) return;
+      var fd = new FormData(f);
+      try { root.localStorage.setItem(DRAFT_KEY, JSON.stringify({ mode: 'new', values: formValues(fd), source: String(fd.get('_source') || 'manual') })); } catch (e) { /* 임시 저장 실패는 무시 */ }
+    }, 400);
+  }
   if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('change', function (e) { if (e.target && e.target.form && e.target.form.id === 'intake-form') saveDraftSoon(); });
     document.addEventListener('input', function (e) {
       var t = e.target;
+      if (t && t.form && t.form.id === 'intake-form') saveDraftSoon();
       if (!t || !t.name || t.name.indexOf('lv_') !== 0) return;
       var form = t.form;
       var out = document.getElementById('lv-sum');
@@ -309,34 +375,69 @@
     if (!open.length) return '';
     var items = [];
     open.forEach(function (r) { r.items.forEach(function (x) { items.push(x); }); });
-    return '<div class="review-note notice warn" role="status"><div><strong>고객정보가 바뀌어 다시 검토할 부분이 있어요</strong><ul>' +
+    return '<div class="review-note notice warn" role="status"><div><strong>고객정보가 바뀌어 다시 검토할 부분이 있어요</strong><p class="small">확정 계획은 그대로예요. 바꿀 내용은 새 수정 제안(계획 버전)으로 만들고 고객이 고르면 확정돼요.</p><ul>' +
       items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
-      '<div class="btn-row">' + (c.view.screen === 'main' && c.view.role === 'planner' ? '<button class="btn btn-sm" data-action="planner-page" data-page="plans">계획 버전 보기</button>' : '') +
+      '<div class="btn-row">' + (c.view.screen === 'main' && c.view.role === 'planner' ? '<button class="btn btn-sm" data-action="planner-latest-version">새 정보로 수정 제안 만들기</button><button class="btn btn-sm" data-action="planner-page" data-page="plans">계획 버전 보기</button>' : '') +
       '<button class="btn btn-sm" data-action="review-dismiss">확인했어요</button></div></div></div>';
   };
 
-  ui.chooseScreen = function (c) {
-    var confirm = c.view.confirm === 'start-over'
-      ? '<div class="notice warn" role="alert"><div><p><strong>모든 데이터를 지우고 고객정보 입력부터 다시 할까요?</strong> 기록·계획 버전·설정이 지워져요(이 브라우저에 백업 1개를 남깁니다). 먼저 내보내기를 해 두면 다시 불러올 수 있어요.</p>' +
-        '<div class="btn-row"><button class="btn btn-danger" data-action="start-over">지우고 다시 입력</button><button class="btn" data-action="cancel-confirm">취소</button></div></div></div>'
-      : '';
-    return '<header class="topbar"><div class="topbar-inner"><div class="brand">재무플래너</div>' +
-      '<button class="btn btn-sm" data-action="edit-info">고객정보 수정</button></div>' +
-      '<div class="demo-note">' + (c.state.customer.isExample ? '가상 고객 데이터(설계 예시)입니다. 실제 금융정보가 아닙니다.' : '이 기기의 브라우저에만 저장돼요. 다른 기기와 자동으로 공유되지 않아요.') + '</div></header>' +
+  function topbar(c, right) {
+    return '<header class="topbar"><div class="topbar-inner"><div class="brand">재무플래너</div>' + (right || '') + '</div>' +
+      '<div class="demo-note">' + (c.state.customer.isExample ? '가상 고객 데이터(설계 예시)입니다. 실제 금융정보가 아닙니다.' : '이 기기의 브라우저에만 저장돼요. 다른 기기와 자동으로 공유되지 않아요.') + '</div></header>';
+  }
+
+  /** 다시 실행했을 때 첫 화면: 기존 정보로 계속 / 새 고객 */
+  ui.welcomeScreen = function (c) {
+    return topbar(c) +
       '<main class="choose-main" id="main">' + (ui.importConfirm ? ui.importConfirm() : '') +
-      '<section class="card"><h1>어떤 화면으로 볼까요?</h1>' + factLine(c) +
-      '<p class="small muted">두 화면은 같은 고객정보와 같은 계산 결과를 씁니다. 로그인 없이 화면 모드만 바꾸는 방식이에요.</p></section>' +
+      '<section class="card"><h1 tabindex="-1">나의 재무상태 자가진단</h1><p>이 기기에 저장해 둔 정보가 있어요.</p>' + factLine(c) + '</section>' +
+      '<div class="choose-grid">' +
+      '<div class="choose-card"><span class="cc-h">기존 정보 확인하고 계속하기</span><span class="cc-d">저장한 정보를 한 번 확인한 뒤(필요하면 고친 뒤) 고객용·설계사용 화면을 골라요.</span>' +
+      '<button class="btn btn-primary btn-block" data-action="continue-existing">기존 정보 확인하고 계속하기</button></div>' +
+      '<div class="choose-card"><span class="cc-h">새 고객 자가진단 시작하기</span><span class="cc-d">빈 입력 화면에서 새로 시작해요. 기존 정보는 지우지 않고, 새 자가진단을 저장할 때 백업해 두어 되돌릴 수 있어요.</span>' +
+      '<button class="btn btn-block" data-action="new-customer">새 고객 자가진단 시작하기</button></div>' +
+      '</div></main>';
+  };
+
+  ui.chooseScreen = function (c) {
+    var prev = ui.prevBackup();
+    var confirm = c.view.confirm === 'start-over'
+      ? '<div class="notice warn" role="alert"><div><p><strong>모든 데이터를 지우고 자가진단부터 다시 할까요?</strong> 기록·계획 버전·설정이 지워져요(이 브라우저에 백업 1개를 남깁니다). 먼저 내보내기를 해 두면 다시 불러올 수 있어요.</p>' +
+        '<div class="btn-row"><button class="btn btn-danger" data-action="start-over">지우고 다시 입력</button><button class="btn" data-action="cancel-confirm">취소</button></div></div></div>'
+      : c.view.confirm === 'restore-prev'
+        ? '<div class="notice warn" role="alert"><div><p><strong>이전 고객(' + esc(((prev && prev.state && prev.state.customer) || {}).name || '') + ') 정보로 되돌릴까요?</strong> 지금 정보는 백업으로 바꿔 둡니다.</p>' +
+          '<div class="btn-row"><button class="btn btn-danger" data-action="restore-prev">되돌리기</button><button class="btn" data-action="cancel-confirm">취소</button></div></div></div>'
+        : '';
+    return topbar(c, '<button class="btn btn-sm" data-action="edit-info">고객정보 수정</button>') +
+      '<main class="choose-main" id="main">' + (ui.importConfirm ? ui.importConfirm() : '') +
+      '<section class="card"><h1 tabindex="-1">어떤 화면으로 확인하시겠어요?</h1>' + factLine(c) +
+      '<p class="small muted">두 화면은 같은 고객정보와 같은 계산 결과를 써요. 로그인이 아니라 보는 방식(화면 모드)만 바꾸는 것이에요.</p></section>' +
       ui.reviewBanner(c) +
       '<div class="choose-grid">' +
-      '<button class="choose-card" data-action="choose-role" data-role="customer"><span class="cc-h">고객용 화면</span>' +
-      '<span class="cc-d">이번 달 계획 · 실제 입력 · 진행 상황 · 알림 · 제안된 수정안 확인</span><span class="cc-go">고객용으로 보기 →</span></button>' +
-      '<button class="choose-card" data-action="choose-role" data-role="planner"><span class="cc-h">설계사용 화면</span>' +
-      '<span class="cc-d">고객 진단 · 설계 전후 비교 · 목표 판정 · 설계안 조정 · 충격 시나리오 · 필요 저축액 역산</span><span class="cc-go">설계사용으로 보기 →</span></button>' +
+      '<div class="choose-card"><span class="cc-tag">고객용</span><span class="cc-h">고객 화면</span>' +
+      '<span class="cc-d">이번 달 실천 계획, 저축 진행 상황, 목표 달성 전망, 알림 및 수정안 확인</span>' +
+      '<button class="btn btn-primary btn-block" data-action="choose-role" data-role="customer">고객 화면으로 들어가기</button></div>' +
+      '<div class="choose-card"><span class="cc-tag">설계사용</span><span class="cc-h">설계사 화면</span>' +
+      '<span class="cc-d">고객 재무진단, 설계 전후 비교, 계획 조정, 충격 시나리오, 필요 저축액 분석</span>' +
+      '<button class="btn btn-primary btn-block" data-action="choose-role" data-role="planner">설계사 화면으로 들어가기</button></div>' +
       '</div>' +
-      '<section class="card"><h2>데이터</h2><p class="small">' + (app().store.mode === 'storage' ? '고객정보와 계획·실제 기록은 이 기기의 브라우저에 저장돼요. 다른 기기와 자동으로 공유되거나 실시간 연동되지 않아요.' : '이 브라우저에는 저장할 수 없어 창을 닫으면 사라져요. 내보내기로 보관하세요.') + '</p>' +
+      '<section class="card"><h2>데이터</h2><p class="small">' + (app().store.mode === 'storage' ? '고객정보·자가진단 응답과 계획·실제 기록은 이 기기의 브라우저에 저장돼요. 다른 기기와 자동으로 공유되거나 실시간 연동되지 않아요.' : '이 브라우저에는 저장할 수 없어 창을 닫으면 사라져요. 내보내기로 보관하세요.') + '</p>' +
       '<div class="btn-row"><button class="btn" data-action="edit-info">고객정보 수정</button><button class="btn" data-action="export-json">내보내기(JSON)</button>' +
       '<label class="btn" for="import-file-choose">불러오기(JSON)</label><input id="import-file-choose" class="sr-only" type="file" accept=".json,application/json" data-change="import-json">' +
-      '<button class="btn btn-danger" data-action="start-over-confirm">처음부터 다시 입력</button></div>' + confirm + '</section></main>';
+      (prev && prev.state ? '<button class="btn" data-action="restore-prev-confirm">이전 고객 정보로 되돌리기</button>' : '') +
+      '<button class="btn" data-action="new-customer">새 고객 자가진단</button>' +
+      '<button class="btn btn-danger" data-action="start-over-confirm">모두 지우고 다시 입력</button></div>' + confirm + '</section></main>';
+  };
+
+  /** 자가진단 응답(공식 투자성향 진단 아님) */
+  ui.selfCheckCard = function (c) {
+    var sc = c.state.selfCheck;
+    var LBL = { keepSpending: '유지하고 싶은 지출', spendFlex: '지출 조정 가능성', incomeStability: '소득 안정성', lossTolerance: '목표자금 손실 감수 가능성', newLoanPref: '새 대출 계획', memo: '하고 싶은 말' };
+    var rows = Object.keys(LBL).map(function (k) {
+      var v = sc && sc.answers ? sc.answers[k] : '';
+      return '<li><span>' + LBL[k] + '</span><span>' + (v ? esc(v) : '<span class="muted">미응답</span>') + '</span></li>';
+    }).join('');
+    return '<section class="card"><h2>자가진단 응답</h2><p class="small muted">고객 본인 응답' + (sc && sc.at ? '(' + esc(sc.at) + ')' : '') + '이에요. 금융기관의 공식 투자성향 진단이 아니고, 재무 수치와 따로 저장해요.</p><ul class="kv">' + rows + '</ul></section>';
   };
 
   /* ---------- 불러오기 확인 ---------- */

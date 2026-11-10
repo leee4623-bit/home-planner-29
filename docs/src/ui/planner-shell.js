@@ -113,7 +113,8 @@
       '<section class="card"><p class="conclusion">적용 성향: <strong>' + ui.esc(rv.applied) + '</strong></p>' +
       (rv.recommend ? '<div class="notice warn"><div><strong>앱 설문 재진단 권고</strong><ul>' + rv.reasons.map(function (x) { return '<li>' + ui.esc(x) + '</li>'; }).join('') + '</ul></div></div>' : '<p class="notice ok">재진단 사유가 없습니다.</p>') +
       '</section><section class="card"><h2>진단 기록</h2>' + ui.table(['구분', '유형', '진단일', '출처', '목적', '진단 당시 실수령'], [row('금융기관', r.institution), row('앱 설문', r.appSurvey)], { caption: '위험성향 기록' }) +
-      '<p class="small muted">나이나 소득만으로 성향을 추정하지 않습니다. 성향이 확인되지 않으면(없음·24개월 경과) 보수적으로 적용합니다. 설문은 고객 화면 → 더보기에서 고객이 직접 합니다.</p></section>';
+      '<p class="small muted">나이나 소득만으로 성향을 추정하지 않습니다. 성향이 확인되지 않으면(없음·24개월 경과) 보수적으로 적용합니다. 설문은 고객 화면 → 더보기에서 고객이 직접 합니다.</p></section>' +
+      (ui.selfCheckCard ? ui.selfCheckCard(c) : '');
   };
 
   /* ---------- 2. 고객 정보·목표 ---------- */

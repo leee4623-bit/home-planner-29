@@ -85,7 +85,8 @@
 
   /** 첫 방문 안내 카드(고객 홈 맨 위) */
   ui.tourWelcome = function (c) {
-    if (ui.tourSeen() || (c.view.tour !== null && c.view.tour !== undefined)) return '';
+    // 둘러보기는 설계 예시(가상 고객) 수치로 설명하므로 예시 고객일 때만 권한다
+    if (!c.state.customer.isExample || ui.tourSeen() || (c.view.tour !== null && c.view.tour !== undefined)) return '';
     return '<section class="card welcome" aria-labelledby="welcome-h"><h2 id="welcome-h">처음 오셨나요?</h2>' +
       '<p class="small">사례 보고서의 가상 고객(29세 사무직, 보증금 4,000만원 목표)의 주거자금 설계를 설계사 화면과 고객 화면을 오가며 4단계로 보여드려요.</p>' +
       '<div class="btn-row"><button class="btn btn-primary" data-action="tour-start">둘러보기 시작(약 2분)</button>' +

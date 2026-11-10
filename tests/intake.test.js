@@ -129,7 +129,7 @@ test('고객정보 수정: 설계 전은 새 입력으로 맞추고, 설계안�
   assert.equal(before.essential, 193);
   assert.equal(after.essential, 165); // 수동 조정값 유지
   assert.equal(after.initial.repayFromCash, 700);
-  assert.deepEqual(r.changed.sort(), ['식비·생필품', '월 실수령'].sort());
+  assert.deepEqual(r.changed.sort(), ['식비·생필품', '월 실수령액'].sort());
   assert.ok(r.notices.some((n) => /설계안 「설계 후 1차/.test(n) && /다시 검토/.test(n)));
   assert.equal(r.state.review.at(-1).dismissed, false);
   // 두 화면이 쓰는 계산이 새 고객정보로 바뀐다
@@ -164,4 +164,21 @@ test('입력칸 내용 확인: 빈 양식은 내용 없음, 하나라도 쓰면 
   v.cash = '0';
   assert.equal(I.hasContent(v), true);
   assert.equal(I.hasContent(I.exampleValues()), true);
+});
+
+test('자가진단 응답은 재무 수치(customer)와 따로 저장하고, 공식 투자성향 진단으로 표시하지 않는다', () => {
+  const s = I.buildState(I.exampleValues(), 'example').state;
+  assert.equal(s.selfCheck.official, false);
+  assert.match(s.selfCheck.note, /공식 투자성향 진단이 아닙니다/);
+  assert.equal(s.selfCheck.answers.lossTolerance, '원금손실은 피하고 싶다');
+  assert.equal(s.customer.preferences, undefined);
+  assert.equal(s.customer.lossTolerance, undefined);
+  assert.deepEqual(s.selfCheck, demo.getDemo().selfCheck);
+  // 자가진단만 바꾸면 계산은 그대로
+  const v = I.fromState(s);
+  v.spendFlex = '조금 줄일 수 있다';
+  const r = I.applyEdit(s, v);
+  assert.equal(r.state.selfCheck.answers.spendFlex, '조금 줄일 수 있다');
+  assert.ok(r.notices.some((n) => /계산 결과는 그대로/.test(n)));
+  assert.equal(engine.rowAt(engine.runPlan(r.state, 'after-v1'), '2029-10').usable, engine.rowAt(engine.runPlan(s, 'after-v1'), '2029-10').usable);
 });

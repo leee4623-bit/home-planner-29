@@ -17,9 +17,10 @@
 
   var SECTIONS = [
     { key: 'basic', title: '기본정보' },
-    { key: 'income', title: '소득과 지출' },
-    { key: 'assets', title: '자산과 부채' },
-    { key: 'goal', title: '목표와 선호' }
+    { key: 'income', title: '소득·지출' },
+    { key: 'assets', title: '자산·부채' },
+    { key: 'goal', title: '재무목표' },
+    { key: 'self', title: '선호·자가진단', note: '본인이 느끼는 대로 고르는 간단한 자가진단입니다. 금융기관의 공식 투자성향 진단이 아니며, 재무 수치와 따로 저장합니다.' }
   ];
 
   // 월 생활비 항목: [키, 이름, 기본 필수 여부]
@@ -39,50 +40,61 @@
 
   var SIZES = ['중소기업', '중견기업', '대기업', '공공기관', '기타'];
   var HOUSEHOLDS = ['미혼 1인 가구', '기혼', '기타'];
-  var PRINCIPAL = ['단기 주거자금은 원금손실 회피', '일부 가격 변동 감수', '미확인'];
-  var NEW_LOAN = ['결혼 전 신규 신용대출 추가 없음', '필요하면 검토', '미확인'];
+  var MARRIAGE = ['계획 없음', '1년 이내', '1~3년 이내', '3년 이후', '아직 모름'];
+  var SPEND_FLEX = ['많이 줄일 수 있다', '조금 줄일 수 있다', '줄이기 어렵다'];
+  var INCOME_STAB = ['안정적이다(고정급 등)', '조금 변동이 있다', '변동이 크다'];
+  var LOSS_TOL = ['원금손실은 피하고 싶다', '조금은 감수할 수 있다', '어느 정도 감수할 수 있다'];
+  var NEW_LOAN = ['결혼 전 신규 신용대출 추가 없음', '필요하면 검토', '아직 모름'];
+  // 자가진단 응답(재무 수치와 따로 state.selfCheck에 저장)
+  var SELF_KEYS = ['keepSpending', 'spendFlex', 'incomeStability', 'lossTolerance', 'newLoanPref', 'memo'];
   var METHODS = [['equalPrincipal', '원금균등'], ['annuity', '원리금균등']];
 
   function money(key, label, section, o) {
     return Object.assign({ key: key, label: label, section: section, type: 'money', unit: '만원', min: 0, max: 100000 }, o || {});
   }
 
+  // hint: 쉬운 설명, ex: 입력 예시
   var FIELDS = [
-    { key: 'name', label: '이름(또는 별칭)', section: 'basic', type: 'text', maxLength: 30, hint: '비우면 "이름 미입력"으로 표시' },
-    { key: 'age', label: '만 나이', section: 'basic', type: 'number', unit: '세', required: true, min: 15, max: 100, step: 1 },
+    { key: 'name', label: '이름(또는 별칭)', section: 'basic', type: 'text', maxLength: 30, hint: '비우면 "이름 미입력"으로 표시', ex: '홍길동' },
+    { key: 'age', label: '나이(만)', section: 'basic', type: 'number', unit: '세', required: true, min: 15, max: 100, step: 1, ex: '29' },
     { key: 'household', label: '가구 형태', section: 'basic', type: 'select', options: HOUSEHOLDS },
-    { key: 'companySize', label: '회사 규모', section: 'basic', type: 'select', options: SIZES },
-    { key: 'job', label: '직업·고용 형태', section: 'basic', type: 'text', maxLength: 40 },
-    { key: 'tenure', label: '재직 연차', section: 'basic', type: 'number', unit: '년 차', min: 1, max: 50, step: 1 },
-    { key: 'baseDate', label: '기준일', section: 'basic', type: 'date', required: true, hint: '이 날의 자산·부채 기준. 설계 시작월은 기준일이 속한 달' },
+    { key: 'job', label: '직업·고용 형태', section: 'basic', type: 'text', maxLength: 40, ex: '정규직 사무직' },
+    { key: 'companySize', label: '회사 규모', section: 'basic', type: 'select', options: SIZES, hint: '청년 정책상품·세금 감면 조건 확인에 씀' },
+    { key: 'tenure', label: '재직 연차', section: 'basic', type: 'number', unit: '년 차', min: 1, max: 50, step: 1, ex: '3' },
+    { key: 'marriagePlan', label: '결혼 계획', section: 'basic', type: 'select', options: MARRIAGE },
+    { key: 'baseDate', label: '기준일', section: 'basic', type: 'date', required: true, hint: '아래 금액들이 언제 기준인지. 계산은 이 날이 속한 달부터 시작해요', ex: '2026-11-03' },
 
-    money('grossPrevYear', '연 총급여(세전)', 'income', { unit: '만원/년', hint: '정책상품 조건 확인에만 씀' }),
-    money('netMonthly', '월 실수령', 'income', { unit: '만원/월', required: true, min: 1, max: 10000 }),
-    money('existingSaving', '기존 저축·투자', 'income', { unit: '만원/월', hint: '참고용(계산은 실수령 − 지출 − 상환으로 함)' }),
-    { key: 'existingSavingNote', label: '기존 저축·투자 구성', section: 'income', type: 'text', maxLength: 60 },
+    money('netMonthly', '월 실수령액', 'income', { unit: '만원/월', required: true, min: 1, max: 10000, hint: '세금·4대보험을 떼고 통장에 들어오는 월급', ex: '320' }),
+    money('grossPrevYear', '연 총급여(세전)', 'income', { unit: '만원/년', hint: '세금 떼기 전 1년 급여. 정책상품 조건 확인에만 씀', ex: '4500' }),
+    money('existingSaving', '현재 저축액(월)', 'income', { unit: '만원/월', hint: '지금 매달 저축·투자하는 돈. 참고용이며 계산은 실수령 − 생활비 − 상환으로 해요', ex: '50' }),
+    { key: 'existingSavingNote', label: '현재 저축 구성', section: 'income', type: 'text', maxLength: 60, hint: '모르면 비워 두세요', ex: '적금 30, 펀드 20' },
 
-    money('depositCurrent', '현재 임차보증금', 'assets', { hint: '돌려받을 금액' }),
-    { key: 'depositReturnMonth', label: '보증금 반환 예정월', section: 'assets', type: 'month', hint: '비우면 목표 시점에 반환된다고 봄' },
-    money('cash', '현금·입출금예금', 'assets'),
-    money('savings', '만기 예·적금', 'assets', { hint: '해지손실 없이 쓸 수 있는 금액' }),
-    money('investment', '투자자산(ETF 등) 순현금화 금액', 'assets', { hint: '팔았을 때 비용을 뺀 금액' }),
-    money('pension', '연금저축', 'assets', { hint: '노후 목적, 주거자금에 넣지 않음' }),
-    money('emergency', '따로 모아 둔 비상금', 'assets'),
-    money('housing', '따로 모아 둔 주거자금', 'assets'),
-    { key: 'debtName', label: '부채 이름', section: 'assets', type: 'text', maxLength: 20, group: 'debt' },
-    money('debtBalance', '부채 잔액', 'assets', { group: 'debt' }),
-    { key: 'debtRate', label: '연 금리', section: 'assets', type: 'number', unit: '%', min: 0, max: 30, step: 0.01, group: 'debt' },
-    { key: 'debtMonths', label: '잔여 상환 기간', section: 'assets', type: 'number', unit: '개월', min: 1, max: 600, step: 1, group: 'debt' },
-    { key: 'debtMethod', label: '상환 방식', section: 'assets', type: 'select', options: METHODS.map(function (m) { return m[1]; }), group: 'debt' },
+    money('cash', '현금·입출금 통장', 'assets', { hint: '언제든 꺼내 쓸 수 있는 돈', ex: '200' }),
+    money('savings', '예·적금', 'assets', { hint: '깨도 손해가 없는(만기된) 예·적금 금액', ex: '600' }),
+    money('investment', '투자자산(주식·ETF 등)', 'assets', { hint: '지금 팔면 수수료·세금을 빼고 손에 쥐는 돈(순현금화 금액)', ex: '400' }),
+    money('depositCurrent', '임차보증금', 'assets', { hint: '집주인에게 맡겨 두고 이사할 때 돌려받는 돈', ex: '1000' }),
+    { key: 'depositReturnMonth', label: '보증금 돌려받는 달', section: 'assets', type: 'month', hint: '비우면 목표 시점에 돌려받는다고 봐요', ex: '2029-10' },
+    money('pension', '연금(연금저축 등)', 'assets', { hint: '노후용. 중간에 깨면 세금 불이익이 있어 주거자금에 넣지 않아요', ex: '100' }),
+    money('emergency', '따로 모아 둔 비상금', 'assets', { hint: '실직·병원비처럼 갑작스러운 일에 쓰려고 떼어 둔 돈', ex: '0' }),
+    money('housing', '따로 모아 둔 주거자금', 'assets', { hint: '이사·보증금용으로 떼어 둔 돈', ex: '0' }),
+    { key: 'debtName', label: '대출 이름', section: 'assets', type: 'text', maxLength: 20, group: 'debt', ex: '신용대출' },
+    money('debtBalance', '대출 잔액', 'assets', { group: 'debt', hint: '아직 갚지 않은 원금', ex: '1000' }),
+    { key: 'debtRate', label: '대출 금리(연)', section: 'assets', type: 'number', unit: '%', min: 0, max: 30, step: 0.01, group: 'debt', ex: '7.2' },
+    { key: 'debtMonths', label: '남은 상환 기간', section: 'assets', type: 'number', unit: '개월', min: 1, max: 600, step: 1, group: 'debt', ex: '36' },
+    { key: 'debtMethod', label: '상환 방식', section: 'assets', type: 'select', options: METHODS.map(function (m) { return m[1]; }), group: 'debt',
+      hint: '원금균등: 매달 같은 원금 + 줄어드는 이자 / 원리금균등: 매달 같은 금액' },
 
-    { key: 'targetMonth', label: '목표 시점(이사월)', section: 'goal', type: 'month', required: true },
-    money('depositTarget', '목표 보증금', 'goal', { required: true, min: 1 }),
-    money('movingCost', '부대비용(이사·중개 등)', 'goal'),
-    money('emergencyTarget', '비상금 목표', 'goal', { required: true }),
-    { key: 'keepSpending', label: '유지하고 싶은 지출', section: 'goal', type: 'text', maxLength: 80 },
-    { key: 'principalPref', label: '주거자금 원금손실에 대한 선호', section: 'goal', type: 'select', options: PRINCIPAL },
-    { key: 'newLoanPref', label: '신규 대출 계획', section: 'goal', type: 'select', options: NEW_LOAN },
-    { key: 'memo', label: '메모', section: 'goal', type: 'text', maxLength: 120 }
+    { key: 'targetMonth', label: '목표 시점(이사할 달)', section: 'goal', type: 'month', required: true, ex: '2029-10' },
+    money('depositTarget', '주거자금 목표액(보증금)', 'goal', { required: true, min: 1, hint: '새 집 보증금으로 필요한 돈', ex: '4000' }),
+    money('movingCost', '부대비용', 'goal', { hint: '중개수수료·이사비 등 보증금 외에 드는 돈', ex: '150' }),
+    money('emergencyTarget', '비상금 목표', 'goal', { required: true, hint: '보통 꼭 필요한 생활비의 3~6개월분', ex: '990' }),
+
+    { key: 'keepSpending', label: '유지하고 싶은 지출', section: 'self', type: 'text', maxLength: 80, hint: '줄이고 싶지 않은 지출', ex: '부모 지원, 운동' },
+    { key: 'spendFlex', label: '지출 조정 가능성', section: 'self', type: 'select', options: SPEND_FLEX, hint: '생활비를 얼마나 줄일 수 있다고 느끼나요?' },
+    { key: 'incomeStability', label: '소득 안정성', section: 'self', type: 'select', options: INCOME_STAB, hint: '앞으로 월 소득이 얼마나 일정할 것 같나요?' },
+    { key: 'lossTolerance', label: '목표자금 손실 감수 가능성', section: 'self', type: 'select', options: LOSS_TOL, hint: '이사 자금이 잠시 줄어드는(원금손실) 것을 견딜 수 있나요?' },
+    { key: 'newLoanPref', label: '새 대출 계획', section: 'self', type: 'select', options: NEW_LOAN },
+    { key: 'memo', label: '하고 싶은 말', section: 'self', type: 'text', maxLength: 120 }
   ];
   // 생활비 항목은 '소득과 지출' 구역의 표로 따로 그린다(금액 + 필수 여부).
   LIVING.forEach(function (l) {
@@ -101,6 +113,7 @@
     name: '가상 고객 B',
     age: '29',
     household: '미혼 1인 가구',
+    marriagePlan: '',
     companySize: '중소기업',
     job: '정규직 사무직',
     tenure: '3',
@@ -127,7 +140,9 @@
     movingCost: '150',
     emergencyTarget: '990',
     keepSpending: '부모 지원, 건강·자기계발 지출 유지',
-    principalPref: PRINCIPAL[0],
+    spendFlex: '',
+    incomeStability: '',
+    lossTolerance: LOSS_TOL[0],
     newLoanPref: NEW_LOAN[0],
     memo: '',
     lv_rent: '70', lv_transport: '10', lv_food: '60', lv_telecom: '8', lv_insurance: '8',
@@ -287,6 +302,7 @@
       job: data.job || '',
       companySize: data.companySize || '',
       household: data.household || '',
+      marriagePlan: data.marriagePlan || '',
       region: prev.region || '',
       grossPrevYear: nz(data.grossPrevYear),
       netMonthly: data.netMonthly,
@@ -302,14 +318,20 @@
       goal: { depositTarget: data.depositTarget, movingCost: nz(data.movingCost), emergencyTarget: data.emergencyTarget, emergencyBasis: '고객 입력 목표' },
       livingItems: lt.items,
       existingSaving: { monthly: data.existingSaving, note: data.existingSavingNote || '' },
-      preferences: { keepSpending: data.keepSpending || '', principal: data.principalPref || '', newLoan: data.newLoanPref || '', memo: data.memo || '' },
-      risk: Object.assign({ institution: null, appSurvey: null }, prev.risk || {}, {
-        note: [data.principalPref, data.newLoanPref].filter(function (x) { return x && x !== '미확인'; }).join(' · ') || (prev.risk && prev.risk.note) || ''
-      }),
+      // 자가진단 응답은 state.selfCheck에 따로 둔다(재무 수치와 구분)
+      risk: Object.assign({ institution: null, appSurvey: null, note: '' }, prev.risk || {}),
       unknown: unknown
     });
     delete c.livingDetail; // 예전 형식(기존·조정이 섞인 표)은 쓰지 않는다
+    delete c.preferences;  // 예전 형식: 자가진단 응답은 selfCheck로 옮김
     return c;
+  }
+
+  /** 자가진단 응답(주관적 응답 — 공식 투자성향 진단 아님) */
+  function buildSelfCheck(data, at) {
+    var answers = {};
+    SELF_KEYS.forEach(function (k) { answers[k] = data[k] === null || data[k] === undefined ? '' : data[k]; });
+    return { kind: '간단 자가진단', official: false, note: '고객 본인 응답이며 금융기관의 공식 투자성향 진단이 아닙니다.', at: at, answers: answers };
   }
 
   function beforePlan(data, prevPlan) {
@@ -361,7 +383,8 @@
       scheduledPayments: [],
       proposals: [],
       alerts: [],
-      changeLog: [{ at: d.baseDate, who: '고객', what: '고객정보 입력 완료', version: 'before-v1' }],
+      selfCheck: buildSelfCheck(d, d.baseDate),
+      changeLog: [{ at: d.baseDate, who: '고객', what: '자가진단·고객정보 입력 완료', version: 'before-v1' }],
       intake: { done: true, source: source === 'example' ? 'example' : 'manual', savedAt: d.baseDate }
     };
     if (source === 'example') {
@@ -442,11 +465,16 @@
     v.depositTarget = fmtNum(g.depositTarget);
     m('movingCost', g.movingCost);
     v.emergencyTarget = fmtNum(g.emergencyTarget);
-    var pr = c.preferences || {};
-    v.keepSpending = pr.keepSpending || '';
-    v.principalPref = PRINCIPAL.indexOf(pr.principal) >= 0 ? pr.principal : '';
-    v.newLoanPref = NEW_LOAN.indexOf(pr.newLoan) >= 0 ? pr.newLoan : '';
-    v.memo = pr.memo || '';
+    v.marriagePlan = MARRIAGE.indexOf(c.marriagePlan) >= 0 ? c.marriagePlan : '';
+    var sc = (state.selfCheck && state.selfCheck.answers) || {};
+    var pr = c.preferences || {}; // 예전 저장본
+    var pick = function (list, x) { return list.indexOf(x) >= 0 ? x : ''; };
+    v.keepSpending = sc.keepSpending || pr.keepSpending || '';
+    v.spendFlex = pick(SPEND_FLEX, sc.spendFlex);
+    v.incomeStability = pick(INCOME_STAB, sc.incomeStability);
+    v.lossTolerance = pick(LOSS_TOL, sc.lossTolerance) || (/원금손실 회피/.test(pr.principal || '') ? LOSS_TOL[0] : '');
+    v.newLoanPref = pick(NEW_LOAN, sc.newLoanPref) || pick(NEW_LOAN, pr.newLoan);
+    v.memo = sc.memo || pr.memo || '';
     if (c.livingItems) {
       c.livingItems.forEach(function (it) {
         v['lv_' + it.key] = it.amount === null || it.amount === undefined ? '' : fmtNum(it.amount);
@@ -496,6 +524,7 @@
     if (!changedKeys.length) return { ok: true, errors: {}, state: state, changed: [], notices: [] };
 
     s.customer = newC;
+    s.selfCheck = buildSelfCheck(d, d.baseDate);
     // 설계 전 계획: 사실 기반이므로 새 입력으로 맞춘다(같은 id 유지).
     if (oldBefore) {
       var idx = s.plans.indexOf(s.plans.filter(function (p) { return p.id === oldBefore.id; })[0]);
@@ -533,8 +562,13 @@
         if (need > avail + 1e-9) notices.push('설계안 「' + (p.name || p.id) + '」은 초기 재배치에 ' + need + '만원이 필요하지만 입력한 현금화 가능 자산은 ' + round1(avail) + '만원입니다.');
       }
     });
-    if (has(/^(depositTarget|movingCost|emergencyTarget|netMonthly|cash|savings|investment|pension|debt|depositCurrent|depositReturnMonth)/)) {
-      notices.push('모든 계획의 결과(목표 판정·그래프)는 새 고객정보로 다시 계산했습니다.');
+    if (has(/^(depositTarget|movingCost|emergencyTarget|netMonthly|cash|savings|investment|pension|debt|depositCurrent|depositReturnMonth|lv_|ess_)/)) {
+      var act = (s.plans || []).filter(function (p) { return p.id === s.activePlanId; })[0];
+      notices.push('진단과 전망(목표 판정·그래프)은 새 고객정보로 다시 계산했습니다' +
+        (act && act.kind !== '설계 전' ? '. 확정 계획 「' + (act.name || act.id) + '」의 내용은 그대로이며, 고칠 내용은 설계사 화면에서 새 수정 제안(새 계획 버전)으로 만들어 고객이 고르게 합니다.' : '.'));
+    }
+    if (changedKeys.every(function (k) { return SELF_KEYS.indexOf(k) >= 0; })) {
+      notices.push('자가진단 응답만 바뀌었습니다. 계산 결과는 그대로입니다.');
     }
 
     s.changeLog = s.changeLog || [];
@@ -556,6 +590,8 @@
     SECTIONS: SECTIONS,
     FIELDS: FIELDS,
     LIVING: LIVING,
+    SELF_KEYS: SELF_KEYS,
+    buildSelfCheck: buildSelfCheck,
     BY_KEY: BY_KEY,
     METHODS: METHODS,
     exampleValues: exampleValues,

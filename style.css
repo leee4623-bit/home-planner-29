@@ -316,7 +316,7 @@ table.data tr.hl td { background: var(--accent-bg); }
 
 @media (max-width: 960px) {
   .planner-wrap { grid-template-columns: 1fr; }
-  .sidebar { position: static; max-height: none; display: flex; overflow-x: auto; gap: 4px; }
+  .sidebar { position: static; max-height: none; display: flex; flex-wrap: wrap; gap: 4px; }
   .sidebar h3 { display: none; }
   .sidebar button { white-space: nowrap; width: auto; }
   .kpis.k4, .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -367,14 +367,19 @@ fieldset.living { border-top: 1px solid var(--border); padding-top: 10px; margin
 .lv-ess { display: inline-flex; align-items: center; gap: 4px; font-size: 0.86rem; min-height: 44px; cursor: pointer; }
 .lv-ess input { width: 20px; height: 20px; accent-color: var(--accent); }
 .lv-total { text-align: right; font-size: 0.95rem; margin-top: 6px; }
-.intake-submit { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 40%); padding: 14px 0 10px; }
+.intake-submit { padding: 8px 0 24px; }
 .intake-submit-note { margin: 0 0 -4px; }
 .choose-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .choose-card {
   display: grid; gap: 6px; text-align: left; padding: 18px; border-radius: var(--radius); border: 2px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow); min-height: 44px;
 }
-.choose-card:hover, .choose-card:focus-visible { border-color: var(--accent); }
+.choose-card { cursor: default; align-content: start; }
+.choose-card .btn { margin-top: 6px; }
+.cc-tag { font-size: 0.78rem; font-weight: 700; color: var(--accent); letter-spacing: .02em; }
+.topbar-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.hint .ex { color: var(--muted); }
+.intake-sec .notice.small { font-size: 0.86rem; }
 .cc-h { font-size: 1.15rem; font-weight: 800; }
 .cc-d { color: var(--muted); font-size: 0.92rem; }
 .cc-go { color: var(--accent); font-weight: 700; }

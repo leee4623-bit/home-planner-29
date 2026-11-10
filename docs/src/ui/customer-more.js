@@ -54,8 +54,9 @@
       row('임차보증금', k.depositReturn ? fmt.num1(k.depositReturn.amount) + '만원 · ' + ui.esc(k.depositReturn.month) + ' 반환' : fv('depositCurrent', null)) +
       row('부채', d0 ? ui.esc(d0.name) + ' ' + fmt.num1(d0.balance) + '만원 · 연 ' + fmt.short(d0.rate * 100) + '% · ' + (d0.method === 'equalPrincipal' ? '원금균등' : '원리금균등') : '없음') + '</ul>' +
       '<h3>목표와 선호</h3><ul class="kv">' + row('목표 보증금', fv('depositTarget', k.goal.depositTarget)) + row('부대비용', fv('movingCost', k.goal.movingCost)) + row('비상금 목표', fv('emergencyTarget', k.goal.emergencyTarget)) +
-      (k.preferences ? row('선호', ui.esc([k.preferences.principal, k.preferences.newLoan, k.preferences.keepSpending].filter(function (x) { return x && x !== '미확인'; }).join(' · ') || '미확인')) : '') + '</ul>' +
-      '<p class="small muted">수정하면 고객용·설계사용 화면 결과가 함께 다시 계산돼요. 설계안의 수동 조정값은 바뀌지 않아요.</p></section>';
+      row('결혼 계획', fv('marriagePlan', k.marriagePlan)) + '</ul>' +
+      '<p class="small muted">수정하면 고객용·설계사용 화면 결과가 함께 다시 계산돼요. 확정한 계획은 바뀌지 않아요.</p></section>' +
+      (ui.selfCheckCard ? ui.selfCheckCard(c) : '');
   }
 
   function riskView(c) {

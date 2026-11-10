@@ -179,6 +179,11 @@
     demoVersion: 4,
     demoToday: '2026-11-03',
     intake: { done: true, source: 'example', savedAt: '2026-11-03' },
+    // 자가진단 응답(고객 본인 응답, 공식 투자성향 진단 아님) — 재무 수치(customer)와 따로 둔다
+    selfCheck: {
+      kind: '간단 자가진단', official: false, note: '고객 본인 응답이며 금융기관의 공식 투자성향 진단이 아닙니다.', at: '2026-11-03',
+      answers: { keepSpending: '부모 지원, 건강·자기계발 지출 유지', spendFlex: '', incomeStability: '', lossTolerance: '원금손실은 피하고 싶다', newLoanPref: '결혼 전 신규 신용대출 추가 없음', memo: '' }
+    },
     activePlanId: 'after-v1',
     caseSource: 'AFPK 영 플래너 챌린지 2026 재무설계 사례 보고서(가상 고객 B안, 기준일 2026-11-03)',
 
@@ -194,6 +199,7 @@
       job: '정규직 사무직',
       companySize: '중소기업',
       household: '미혼 1인 가구',
+      marriagePlan: '',
       region: '',
       grossPrevYear: 4500,
       netMonthly: 320,
@@ -223,8 +229,7 @@
         { key: 'otherOpt', label: '기타 선택 지출', amount: 0, essential: false }
       ],
       existingSaving: { monthly: 50, note: '세부 구성 미확인' },
-      preferences: { keepSpending: '부모 지원, 건강·자기계발 지출 유지', principal: '단기 주거자금은 원금손실 회피', newLoan: '결혼 전 신규 신용대출 추가 없음', memo: '' },
-      risk: { institution: null, appSurvey: null, note: '단기 주거자금은 원금손실 회피 · 결혼 전 신규 신용대출 추가 없음' },
+      risk: { institution: null, appSurvey: null, note: '' },
       unknown: [],
       isExample: true
     },

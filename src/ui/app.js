@@ -123,7 +123,7 @@
     var saved = app.store.save(s);
     app.d = null;
     app.view.confirm = null;
-    render();
+    ui.render();
     if (!saved.ok) {
       // 저장 실패를 성공처럼 알리지 않는다
       ui.toast('저장하지 못했어요. 화면에는 반영됐지만 창을 닫으면 사라집니다. 내보내기(JSON)로 보관하세요.');
@@ -140,7 +140,7 @@
   ui.setView = function (patch, keepScroll) {
     Object.assign(app.view, patch);
     saveView();
-    render();
+    ui.render();
     if (!keepScroll) root.scrollTo(0, 0);
   };
 
@@ -150,11 +150,12 @@
     var j = c.d.current.judgement;
     var role = c.view.role;
     return '<header class="topbar"><div class="topbar-inner">' +
-      '<button class="brand" data-action="go-choose" aria-label="재무플래너 — 화면 선택으로">재무플래너</button>' +
-      '<div class="seg" role="group" aria-label="화면 전환">' +
+      '<div class="brand">재무플래너</div>' +
+      '<div class="seg" role="group" aria-label="보는 화면 바꾸기(화면 모드)">' +
       '<button data-action="role" data-role="customer" aria-pressed="' + (role === 'customer') + '">고객용</button>' +
       '<button data-action="role" data-role="planner" aria-pressed="' + (role === 'planner') + '">설계사용</button></div>' +
-      '<button class="btn btn-sm edit-info" data-action="edit-info">고객정보 수정</button>' +
+      '<div class="topbar-actions"><button class="btn btn-sm" data-action="go-choose">화면 선택으로 돌아가기</button>' +
+      '<button class="btn btn-sm" data-action="edit-info">고객정보 수정</button></div>' +
       '<div class="context-line"><span>고객 <strong>' + ui.esc(s.customer.name || '이름 없음') + '</strong>' + (s.customer.isExample ? ' ' + ui.badge('가상 고객', 'info') : '') + '</span>' +
       '<span>실행 기준 <strong>' + ui.esc(c.d.plan ? c.d.plan.name : '없음') + '</strong></span>' +
       '<span>' + ui.judgementBadge(j) + '</span></div>' +
@@ -213,6 +214,11 @@
         return;
       }
       c = ctx();
+      if (app.view.screen === 'welcome') {
+        el.className = 'choose-view';
+        el.innerHTML = ui.welcomeScreen(c) + footer(c);
+        return;
+      }
       if (app.view.screen === 'choose') {
         el.className = 'choose-view';
         el.innerHTML = ui.chooseScreen(c) + footer(c);
@@ -229,13 +235,63 @@
       el.innerHTML = '<main class="customer-main">' + ui.errorBox('화면을 그리는 중 문제가 생겼어요. 다시 시도하거나 설계 예시로 되돌려 주세요.') + '</main>';
     }
   }
-  ui.render = render;
+  /* ---------- 화면 이동: 새 화면이면 맨 위로, 브라우저 뒤로가기 지원 ---------- */
+  var lastNav = null;
+  var fromPop = false;
+  function navOf(v) {
+    return { screen: v.screen, role: v.role, intakeMode: v.screen === 'intake' ? v.intakeMode : null };
+  }
+  function navKey(n) { return n.screen + '|' + (n.screen === 'main' ? n.role : n.screen === 'intake' ? n.intakeMode : ''); }
+  function renderNav() {
+    render();
+    var n = navOf(app.view);
+    if (!app.state) n = { screen: 'intake', role: app.view.role, intakeMode: 'new' };
+    var key = navKey(n);
+    if (lastNav === key) return;
+    var first = lastNav === null;
+    lastNav = key;
+    try {
+      if (root.history && root.history.pushState) {
+        if (first || fromPop) root.history.replaceState({ nav: n }, '');
+        else {
+          // 저장을 마치고 넘어간 경우: 뒤로 가면 '확인' 모드로 입력값이 보이게 앞 기록을 바꾼다
+          if (app.navReplacePrev) { root.history.replaceState({ nav: app.navReplacePrev }, ''); app.navReplacePrev = null; }
+          root.history.pushState({ nav: n }, '');
+        }
+      }
+    } catch (e) { /* 기록을 못 남겨도 화면은 그대로 */ }
+    if (!first) {
+      if (root.scrollTo) root.scrollTo(0, 0);
+      var h = document.querySelector ? document.querySelector('#app h1, #app .page-head h2, #app main h2') : null;
+      if (h && h.focus) { if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e2) { /* 무시 */ } }
+    }
+  }
+  if (typeof root.addEventListener === 'function') {
+    root.addEventListener('popstate', function (e) {
+      var n = e.state && e.state.nav;
+      if (!n) return;
+      if (!app.state) n = { screen: 'intake', intakeMode: 'new', role: app.view.role };
+      app.view.screen = n.screen;
+      if (n.role) app.view.role = n.role;
+      if (n.screen === 'intake') {
+        app.view.intakeMode = n.intakeMode || 'review';
+        app.view.intakeDraft = null;
+        app.view.intakeErrors = null;
+        app.view.intakeSaveError = null;
+      }
+      fromPop = true;
+      lastNav = null === lastNav ? null : 'x';
+      renderNav();
+      fromPop = false;
+    });
+  }
+  ui.render = renderNav;
 
   /* ---------- 공통 동작 ---------- */
   Object.assign(ui.actions, {
     role: function (c, el) { ui.setView({ role: el.getAttribute('data-role'), screen: 'main' }); },
     tab: function (c, el) { ui.setView({ tab: el.getAttribute('data-tab'), more: null, confirm: null }); },
-    retry: function () { app.d = null; render(); },
+    retry: function () { app.d = null; ui.render(); },
     'reset-demo-confirm': function () { ui.setView({ screen: 'main', confirm: 'reset-demo', role: 'customer', tab: 'more', more: 'data' }); },
     'reset-demo': function () {
       var s = app.store.reset();
@@ -291,7 +347,7 @@
       s = P.alerts.syncAlerts(s).state;
       app.state = s;
       app.store.save(s); // 예전 저장본은 이전된 형식으로 다시 저장(삭제하지 않음)
-      app.view.screen = 'choose'; // 다시 실행하면 저장한 고객정보로 화면 선택부터
+      app.view.screen = 'welcome'; // 다시 실행: 기존 정보로 계속 / 새 고객 시작 선택
     } else {
       app.state = null;
       app.view.screen = 'intake'; // 처음 실행: 고객정보 입력부터
@@ -299,7 +355,7 @@
       if (loaded.corrupt) setTimeout(function () { ui.toast('저장된 데이터를 읽지 못했어요. 지우지 않고 백업해 두었어요. 새로 입력하거나 파일을 불러오세요.'); }, 0);
     }
     bindEvents();
-    render();
+    renderNav();
     if (app.store.mode === 'memory') ui.toast('이 브라우저에는 저장할 수 없어 이번 창에서만 유지돼요. 내보내기(JSON)로 보관하세요.');
     // 서비스 워커는 https에서만(파일로 열면 등록하지 않음)
     if (root.location && root.location.protocol === 'https:' && root.navigator && root.navigator.serviceWorker) {

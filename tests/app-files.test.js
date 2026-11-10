@@ -68,9 +68,12 @@ function text(html) { return html.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;
 test('처음 실행하면 고객정보 입력 화면이 먼저 나온다(설계 예시 버튼 포함)', () => {
   const { target } = bootApp();
   assert.match(target.className, /intake-view/);
-  assert.match(target.innerHTML, /고객정보 입력/);
+  assert.match(target.innerHTML, /나의 재무상태 자가진단/);
   assert.match(target.innerHTML, /설계 예시 불러오기/);
-  for (const sec of ['기본정보', '소득과 지출', '자산과 부채', '목표와 선호']) assert.ok(target.innerHTML.includes(sec), sec);
+  assert.match(target.innerHTML, /자가진단 완료하고 시작하기/);
+  assert.match(target.innerHTML, /공식 투자성향 진단이 아니며/);
+  assert.ok(!/고객 화면으로 들어가기/.test(target.innerHTML)); // 선택 카드는 입력 화면에 붙이지 않는다
+  for (const sec of ['기본정보', '소득·지출', '자산·부채', '재무목표', '선호·자가진단']) assert.ok(target.innerHTML.includes(sec), sec);
   assert.ok(!BAD.test(text(target.innerHTML)));
 });
 
@@ -81,8 +84,13 @@ test('모든 고객·설계사 화면을 그려도 오류 화면이 없고 개�
   ui.app.state = P.alerts.syncAlerts(P.intake.buildState(P.intake.exampleValues(), 'example').state).state;
   ui.app.d = null;
   ui.setView({ screen: 'choose' });
-  assert.match(target.innerHTML, /고객용 화면/);
-  assert.match(target.innerHTML, /설계사용 화면/);
+  assert.match(target.innerHTML, /어떤 화면으로 확인하시겠어요/);
+  assert.match(target.innerHTML, /고객 화면으로 들어가기/);
+  assert.match(target.innerHTML, /설계사 화면으로 들어가기/);
+  assert.ok(!/intake-form/.test(target.innerHTML)); // 별도 화면
+  ui.setView({ screen: 'welcome' });
+  assert.match(target.innerHTML, /기존 정보 확인하고 계속하기/);
+  assert.match(target.innerHTML, /새 고객 자가진단 시작하기/);
   assert.match(target.innerHTML, /가상 고객 데이터/);
   ui.app.view.screen = 'main';
   // 고객정보 수정 화면(같은 입력 화면)
