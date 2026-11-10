@@ -3,7 +3,7 @@
  * 네트워크 먼저 받으므로 배포하면 바로 새 파일이 보인다. 파일 목록이 바뀌면 VERSION을 올려 옛 캐시를 지운다.
  * 데이터는 브라우저 저장소에만 있고 여기서 다루지 않는다.
  */
-var VERSION = 'jaemu-planner-v3';
+var VERSION = 'jaemu-planner-v4';
 var FILES = [
     './',
     './index.html',
@@ -64,7 +64,9 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  e.respondWith(fetch(req).then(function (res) {
+  // 브라우저 HTTP 캐시(깃허브 페이지는 최대 10분)를 건너뛰고 서버에 새 파일이 있는지 확인한다
+  var fresh = req.mode === 'navigate' ? fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(req, { cache: 'no-cache' });
+  e.respondWith(fresh.then(function (res) {
     if (res && res.ok) {
       var copy = res.clone();
       caches.open(VERSION).then(function (c) { c.put(req, copy); });

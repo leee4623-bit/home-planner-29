@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1].replace(/\?.*$/, "")); // ?v= 캐시 번호는 떼고 파일만
 
 test('index.html의 스크립트 파일이 모두 있다', () => {
   assert.ok(scripts.length > 20);
