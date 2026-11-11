@@ -2,7 +2,7 @@
  * 고객정보 입력(첫 화면)의 항목 정의·검사·상태 만들기. 화면과 분리된 순수 함수라 Node에서 테스트한다.
  *
  * - 입력값(values)은 화면 입력칸과 같은 이름의 문자열 묶음이다. 빈 칸 = 미확인, '0' = 실제 0원.
- * - 고객정보에는 '지금 사실'만 넣는다. 설계안(생활비 200, 대출 700 상환, 연금 월 10, 목적자금 110 등)은
+ * - 고객정보에는 '지금 사실'만 넣는다. 설계안(생활비 195, 대출 700 상환, 연금 월 10, 완충저축 5, 목적자금 110 등)은
  *   계획 버전(plans)에 따로 두고, 고객정보 수정이 설계안의 수동 조정값을 덮어쓰지 않는다.
  * - 계산에 쓰는 금액 칸은 미확인이면 0으로 계산하고 customer.unknown에 이름을 남겨 화면에 '미확인'으로 표시한다.
  */
@@ -68,6 +68,8 @@
     money('grossPrevYear', '연 총급여(세전)', 'income', { unit: '만원/년', hint: '세금 떼기 전 1년 급여. 정책상품 조건 확인에만 씀', ex: '4500' }),
     money('existingSaving', '현재 저축액(월)', 'income', { unit: '만원/월', hint: '지금 매달 저축·투자하는 돈. 참고용이며 계산은 실수령 − 생활비 − 상환으로 해요', ex: '50' }),
     { key: 'existingSavingNote', label: '현재 저축 구성', section: 'income', type: 'text', maxLength: 60, hint: '모르면 비워 두세요', ex: '적금 30, 펀드 20' },
+    { key: 'taxEndMonth', label: '소득세 감면 끝나는 달', section: 'income', type: 'month', hint: '중소기업 취업자 소득세 감면을 받고 있다면 마지막 달. 그다음 달부터 실수령이 줄어요', ex: '2029-05' },
+    money('taxEndEffect', '감면 종료 후 월 실수령 감소액', 'income', { unit: '만원/월', max: 500, hint: '감면이 끝나면 줄어드는 월 실수령', ex: '7' }),
 
     money('cash', '현금·입출금 통장', 'assets', { hint: '언제든 꺼내 쓸 수 있는 돈', ex: '200' }),
     money('savings', '예·적금', 'assets', { hint: '깨도 손해가 없는(만기된) 예·적금 금액', ex: '600' }),
@@ -122,6 +124,8 @@
     netMonthly: '320',
     existingSaving: '50',
     existingSavingNote: '세부 구성 미확인',
+    taxEndMonth: '2029-05',
+    taxEndEffect: '7',
     depositCurrent: '1000',
     depositReturnMonth: '',
     cash: '200',
@@ -306,7 +310,8 @@
       region: prev.region || '',
       grossPrevYear: nz(data.grossPrevYear),
       netMonthly: data.netMonthly,
-      taxExemption: prev.taxExemption === undefined ? null : prev.taxExemption,
+      taxExemption: data.taxEndMonth ? { applied: true, end: data.taxEndMonth, monthlyEffect: nz(data.taxEndEffect), note: (prev.taxExemption && prev.taxExemption.end === data.taxEndMonth && prev.taxExemption.note) || '고객 입력' }
+        : (prev.taxExemption && !prev.taxExemption.applied ? prev.taxExemption : null),
       cash: nz(data.cash),
       savings: nz(data.savings),
       emergency: nz(data.emergency),
@@ -391,6 +396,8 @@
       // 예시는 기준일·설계 시작월을 고정한다(오늘 날짜로 계산 기간이 바뀌지 않게).
       s.demoToday = d.baseDate;
       s.demoVersion = tpl.demoVersion;
+      s.household = tpl.household; // 배우자·전세대출·계약 일정(보고서 추가 가상 설정)
+      if (s.customer.taxExemption && tpl.customer.taxExemption && s.customer.taxExemption.end === tpl.customer.taxExemption.end) s.customer.taxExemption.note = tpl.customer.taxExemption.note;
       s.caseSource = tpl.caseSource;
       s.customer.isExample = true;
       var design = tpl.plans.filter(function (p) { return p.kind === '설계 후'; });
@@ -447,6 +454,9 @@
     v.netMonthly = fmtNum(c.netMonthly);
     v.existingSaving = c.existingSaving && c.existingSaving.monthly !== null && c.existingSaving.monthly !== undefined ? fmtNum(c.existingSaving.monthly) : '';
     v.existingSavingNote = (c.existingSaving && c.existingSaving.note) || '';
+    var te = c.taxExemption && c.taxExemption.applied ? c.taxExemption : null;
+    v.taxEndMonth = te && te.end ? te.end : '';
+    v.taxEndEffect = te ? fmtNum(te.monthlyEffect) : '';
     var dr = c.depositReturn || null;
     v.depositCurrent = dr ? fmtNum(dr.amount) : (unk.indexOf('depositCurrent') >= 0 ? '' : '0');
     v.depositReturnMonth = dr && dr.month && !/미확인/.test(dr.note || '') ? dr.month : '';

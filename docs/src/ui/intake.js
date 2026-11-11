@@ -137,7 +137,7 @@
       '<ul class="legend-list small"><li><span class="req">필수</span> 꼭 입력 · <span class="opt">선택</span> 모르면 비워 두기</li><li>빈 칸은 <strong>미확인</strong>, 실제로 없으면 <strong>0</strong>을 입력 · 금액 단위는 <strong>만원</strong>(100만원 → 100)</li></ul>' +
       '<div class="btn-row"><button class="btn" data-action="intake-example">설계 예시 불러오기</button>' +
       (mode === 'new' ? '<label class="btn" for="import-file-intake">저장해 둔 파일 불러오기(JSON)</label><input id="import-file-intake" class="sr-only" type="file" accept=".json,application/json" data-change="import-json">' : '') + '</div>' +
-      (example ? '<div class="notice info"><span aria-hidden="true">i</span><p><strong>가상 고객 예시</strong>예요. 공모전 사례 보고서의 가상 고객이 설계를 받기 <strong>전</strong> 정보입니다(기준일 2026-11-03, 설계 시작월 2026-11 고정). 생활비 200·대출 700 상환·연금 월 10 같은 개선안은 넣지 않았고, 저장하면 보고서 설계안이 별도 계획 버전으로 붙습니다. 값은 고칠 수 있어요.</p></div>' : '') +
+      (example ? '<div class="notice info"><span aria-hidden="true">i</span><p><strong>가상 고객 예시</strong>예요. 공모전 사례 보고서의 가상 고객이 설계를 받기 <strong>전</strong> 정보입니다(기준일 2026-11-03, 설계 시작월 2026-11 고정). 생활비 195·대출 700 상환·연금 월 10·완충저축 월 5 같은 개선안은 넣지 않았고, 저장하면 보고서 설계안이 별도 계획 버전으로 붙습니다. 값은 고칠 수 있어요.</p></div>' : '') +
       confirm + saveErr + errorSummary(errors) + '</section>' +
       '<form id="intake-form" data-submit="intake-save" novalidate>' +
       '<input type="hidden" name="_source" value="' + esc(source) + '">' +

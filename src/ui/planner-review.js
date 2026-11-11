@@ -121,7 +121,7 @@
     return ui.pageHead('계산 검증', '정답 테스트 · 월별 계산표 · 공개 계산 순서') +
       '<section class="card"><h2>① 정답 테스트 ' + ui.badge(passed + '/' + results.length + ' 통과', passed === results.length ? 'ok' : 'bad') + '</h2>' +
       ui.table(['#', '조건', '결과', '항목별(기대값, 허용 오차 ±' + P.cases.TOLERANCE + ')'], caseRows, { caption: '정답 테스트' }) +
-      '<p class="small muted">R은 재무설계 사례 보고서(가상 고객 B안)의 본문 수치를 앱 계산으로 재현하는지 확인합니다. A·B는 이전 시연 고객(김하늘) 자료로 엔진 계산 규칙이 바뀌지 않았는지 확인하는 회귀 시험입니다(A: 원본 앱 재현 호환 모드, B: 기본 모드). 같은 사례를 Node 테스트로도 검사합니다.</p></section>' +
+      '<p class="small muted">R은 재무설계 사례 보고서 최종본(가상 고객 B안, 2026-11-10)의 본문·부록 수치(원금 4,311.4, 표 14·15·16·19·24)를 앱 계산으로 재현하는지 확인합니다. A·B는 이전 시연 고객(김하늘) 자료로 엔진 계산 규칙이 바뀌지 않았는지 확인하는 회귀 시험입니다(A: 원본 앱 재현 호환 모드, B: 기본 모드). 같은 사례를 Node 테스트로도 검사합니다.</p></section>' +
       '<section class="card"><h2>② 월별 계산표</h2><form data-submit="verify-run" class="form-inline">' +
       '<div class="field"><label for="vf-p">계획</label><select id="vf-p" name="planId">' + c.state.plans.map(function (p) { return '<option value="' + ui.esc(p.id) + '"' + (p.id === v.planId ? ' selected' : '') + '>' + ui.esc(p.name + ' (' + p.id + ')') + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label for="vf-r">상환 규칙</label><select id="vf-r" name="rule"><option value="default"' + (v.rule === 'default' ? ' selected' : '') + '>기본(고금리만 추가 상환)</option><option value="legacy"' + (v.rule === 'legacy' ? ' selected' : '') + '>호환 모드(원본 앱 재현)</option></select></div>' +

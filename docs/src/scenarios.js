@@ -22,7 +22,9 @@
   var SCENARIO_TYPES = {
     incomeDrop: { label: '소득 감소', valueLabel: '감소율', unit: '%', needsStart: true, needsMonths: true, defaults: { value: 0.1, months: 12 } },
     jobLoss: { label: '실직', valueLabel: '기간 중 월 대체소득(구직급여 등)', unit: '만원', needsStart: true, needsMonths: true, defaults: { value: 0, months: 3 } },
-    livingRise: { label: '생활비 상승', valueLabel: '상승률', unit: '%', needsStart: true, needsMonths: true, defaults: { value: 0.1, months: 0 } },
+    livingRise: { label: '생활비 상승', valueLabel: '상승률', unit: '%', needsStart: true, needsMonths: true, defaults: { value: 0.023, months: 0 } },
+    bufferSkip: { label: '보완저축 미실행', valueLabel: '저축하지 않고 쓰는 월 금액(주거 완충저축)', unit: '만원', needsStart: false, needsMonths: false, defaults: { value: 5 } },
+    taxEndShock: { label: '감면 종료 충격 확대', valueLabel: '감면 종료 후 월 실수령 감소액', unit: '만원', needsStart: false, needsMonths: false, defaults: { value: 10 } },
     depositTargetRise: { label: '목표 보증금 상승', valueLabel: '상승액', unit: '만원', needsStart: false, needsMonths: false, defaults: { value: 500 } },
     investmentLoss: { label: '투자 손실', valueLabel: '손실률(한 번)', unit: '%', needsStart: true, needsMonths: false, defaults: { value: 0.2 } },
     depositDelay: { label: '보증금 반환 지연', valueLabel: '지연 개월', unit: '개월', needsStart: false, needsMonths: false, defaults: { value: 6 } }
@@ -48,7 +50,7 @@
 
   function mergeHooks(list) {
     var out = {};
-    ['income', 'living', 'investment', 'debtBudget', 'pension'].forEach(function (k) {
+    ['income', 'living', 'investment', 'debtBudget', 'pension', 'housingFirst'].forEach(function (k) {
       var h = chain(list.map(function (x) { return x && x[k]; }));
       if (h) out[k] = h;
     });
@@ -86,14 +88,37 @@
       if (s.pausePension) h.pension = function (p, ctx) { return inWindow(ctx.month, s.start, s.months) ? 0 : p; };
       hooks.push(h);
     });
+    // 생활비 상승: 시작월에 오른다. steps면 이후 12개월마다 같은 비율로 다시 오른다(보고서 표 24: 13·25개월 차 2.3%씩).
+    // keepRent면 월세·관리비(고객정보의 rent 항목)는 오르지 않는다(비주거 생활비 상승).
+    var rent = 0;
+    (c.livingItems || []).forEach(function (it) { if (it.key === 'rent' && it.essential) rent = num(it.amount); });
     on.filter(function (s) { return s.type === 'livingRise'; }).forEach(function (s) {
       hooks.push({
         living: function (lv, ctx) {
           if (!inWindow(ctx.month, s.start, s.months)) return lv;
-          var f = 1 + num(s.value);
+          var steps = s.steps ? Math.floor((dates.parseYM(ctx.month) - dates.parseYM(s.start)) / 12) + 1 : 1;
+          var f = Math.pow(1 + num(s.value), steps);
+          if (s.keepRent && rent > 0) {
+            var fixed = Math.min(rent, lv.essential);
+            return { essential: fixed + (lv.essential - fixed) * f, optional: lv.optional * f };
+          }
           return { essential: lv.essential * f, optional: lv.optional * f };
         }
       });
+    });
+    // 보완저축 미실행: 완충저축을 하지 않고 그 돈을 써 버린다(보고서 표 24: 월 5 × 36회 제외)
+    on.filter(function (s) { return s.type === 'bufferSkip'; }).forEach(function (s) {
+      var v = num(s.value === undefined ? 5 : s.value);
+      hooks.push({
+        housingFirst: function () { return 0; },
+        living: function (lv) { return { essential: lv.essential, optional: lv.optional + v }; }
+      });
+    });
+    on.filter(function (s) { return s.type === 'taxEndShock'; }).forEach(function (s) {
+      var te = c.taxExemption;
+      if (!te || !te.applied || !dates.isValidYM(te.end)) return;
+      var extra = Math.max(0, num(s.value) - num(te.monthlyEffect));
+      hooks.push({ income: function (inc, ctx) { return dates.parseYM(ctx.month) > dates.parseYM(te.end) ? inc - extra : inc; } });
     });
     on.filter(function (s) { return s.type === 'investmentLoss'; }).forEach(function (s) {
       hooks.push({ investment: function (inv, ctx) { return ctx.month === s.start ? inv * (1 - num(s.value)) : inv; } });

@@ -187,6 +187,39 @@
       });
     }
 
+    // 6. 주거 완충저축(보완저축) 미납(보고서 표 27): 확정 기록의 주거 적립이 완충저축 금액보다 적은 달
+    if (settings.bufferMissed !== false) {
+      (state.records || []).forEach(function (r) {
+        if (r.status === '잠정' || r.housing === undefined) return;
+        var row = engine.rowAt(res, r.month);
+        if (!row || !(row.bufferIn > EPS) || num(r.housing) >= row.bufferIn - EPS) return;
+        alerts.push({
+          id: 'buffer-missed-' + r.month,
+          type: 'bufferMissed',
+          severity: SEVERITY.WARN,
+          month: r.month,
+          title: r.month + ' 주거 완충저축 미납',
+          message: r.month + ' 주거 적립이 ' + fmt.short(num(r.housing)) + '만원으로 완충저축 ' + fmt.short(row.bufferIn) + '만원보다 적습니다. 누적 부족액과 복구 일정을 정하세요.',
+          data: { planned: row.bufferIn, actual: num(r.housing) }
+        });
+      });
+    }
+
+    // 7. 지급 후 완충자금(보고서 표 2·27): 가구 조달표의 지급 후 잔액이 최소 완충자금보다 적으면 계약 조건 재조정
+    var HH = isNode ? require('./household.js') : root.Planner.household;
+    var hh = HH && state.household ? HH.compute(state, replay && replay.rows ? replay : res) : null;
+    if (hh && !hh.ok) {
+      alerts.push({
+        id: 'payday-buffer',
+        type: 'paydayBuffer',
+        severity: SEVERITY.BAD,
+        month: hh.targetMonth,
+        title: '지급 후 완충자금 부족',
+        message: '모든 지급 후 남는 돈이 ' + fmt.short(hh.after) + '만원으로 최소 완충자금 ' + fmt.short(hh.bufferMin) + '만원보다 적습니다. 계약 조건(비용·시점·추가 재원)을 다시 조정하세요.',
+        data: { after: hh.after, bufferMin: hh.bufferMin }
+      });
+    }
+
     return alerts;
   }
 

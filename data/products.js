@@ -1,5 +1,6 @@
 /*
- * 은행 예·적금 후보(보고서 표 12). 공시·조회 기준 2026-11-03, 금리는 세전 연이율.
+ * 은행 적금 후보(보고서 최종본 표 16·17). 같은 목적·같은 납입 조건(월 80·21개월)끼리 비교한다. 금리는 세전 연이율.
+ * 정기예금·납입한도 30 적금처럼 조건이 다른 상품은 같은 줄에서 비교하지 않는다(보고서 부록 5).
  * 특정 상품 추천이 아니라 사례 보고서가 조사한 후보를 같은 가정으로 비교하기 위한 자료다.
  * 가입 시점의 금리·판매가 같다는 보장이 없으므로 화면에 확인일과 함께 '조건부'로 표시한다.
  */
@@ -21,15 +22,22 @@
       conditions: '기간 6~36개월, 월 1천 원~300만 원. 계약월수의 절반 이상 자동이체 납입 후 만기 해지 시 0.20%p 우대',
       caution: '중도해지 시 약정 만기금리보다 낮은 금리가 적용될 수 있음',
       source: { title: '카카오뱅크 자유적금 상품안내 및 금리정보', url: 'https://www.kakaobank.com/products/savings' },
-      checkedAt: '2026-11-03'
+      checkedAt: '2026-11-10'
     },
     {
-      id: 'kakao-deposit', bank: '카카오뱅크', name: '정기예금', use: '적금 만기 후 사용일까지 남는 목돈의 조건부 운용 후보', kind: 'deposit',
-      lumpMin: 100, termMin: 1, termMax: 36,
-      rates: [{ min: 6, max: 11, base: 0.036, pref: null }, { min: 12, max: 23, base: 0.038, pref: null }],
-      conditions: '최소 가입금액 100만 원, 기간 1~36개월',
-      caution: '계약금·잔금 지급일이 먼저이면 가입하지 않음',
-      source: { title: '카카오뱅크 정기예금 상품안내 및 금리정보', url: 'https://www.kakaobank.com/products/deposit' },
+      id: 'kbank-main', bank: '케이뱅크', name: '주거래우대 자유적금', use: '주거자금 정기 적립 비교 후보', kind: 'installment',
+      rates: [{ min: 21, max: 21, base: 0.037, pref: 0.043 }],
+      conditions: '최대 우대는 급여 입금·통신비 자동이체·체크카드 실적 등 우대조건을 충족할 때',
+      caution: '보고서는 월 80·21개월 조건의 금리만 조회함. 우대조건을 위해 추가 소비를 만들지 않음',
+      source: { title: '케이뱅크 주거래우대 자유적금 상품안내', url: 'https://www.kbanknow.com' },
+      checkedAt: '2026-11-10'
+    },
+    {
+      id: 'kb-mymind', bank: 'KB국민은행', name: '내맘대로적금(자유적립식)', use: '주거자금 정기 적립 비교 후보', kind: 'installment',
+      rates: [{ min: 21, max: 21, base: 0.025, pref: 0.031 }],
+      conditions: '선택한 우대조건을 실제로 충족할 때 최대 우대',
+      caution: '금리는 상품설명자료의 2026-11-03 기준. 보고서는 월 80·21개월 조건만 조회함',
+      source: { title: 'KB내맘대로적금 상품설명자료', url: 'https://www.kbstar.com' },
       checkedAt: '2026-11-03'
     }
   ];

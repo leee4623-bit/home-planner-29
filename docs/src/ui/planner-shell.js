@@ -137,7 +137,7 @@
     var te = k.taxExemption || {};
     var issues = c.d.issues;
     var rows = INFO_ROWS.map(function (r) { return [r[1], (k.unknown || []).indexOf(r[0]) >= 0 ? '미확인' : show(k[r[0]])]; }).concat([
-      ['소득세 감면', te.applied ? te.start + ' ~ ' + te.end + ' (종료 후 −' + fmt.short(te.monthlyEffect) + '만원)' : '미적용'],
+      ['소득세 감면', te.applied ? (te.start ? te.start + ' ~ ' : '') + te.end + ' 종료' + ' (종료 후 −' + fmt.short(te.monthlyEffect) + '만원)' : '미적용'],
       ['보증금 반환', k.depositReturn ? fmt.num1(k.depositReturn.amount) + '만원 · ' + k.depositReturn.month : '—'],
       ['목표 보증금 / 이사비 / 비상금', show(k.goal.depositTarget) + ' / ' + show(k.goal.movingCost) + ' / ' + show(k.goal.emergencyTarget)]
     ]);

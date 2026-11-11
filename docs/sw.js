@@ -3,7 +3,7 @@
  * 네트워크 먼저 받으므로 배포하면 바로 새 파일이 보인다. 파일 목록이 바뀌면 VERSION을 올려 옛 캐시를 지운다.
  * 데이터는 브라우저 저장소에만 있고 여기서 다루지 않는다.
  */
-var VERSION = 'jaemu-planner-v4';
+var VERSION = 'jaemu-planner-v5';
 var FILES = [
     './',
     './index.html',
@@ -33,6 +33,7 @@ var FILES = [
     './src/csv.js',
     './src/proposals.js',
     './src/models.js',
+    './src/household.js',
     './tests/cases.js',
     './src/ui/components.js',
     './src/ui/chart.js',

@@ -190,13 +190,15 @@
   var PCT_TYPES = { incomeDrop: true, livingRise: true, investmentLoss: true };
 
   function defaultScenarios(c) {
-    // 보고서 표 17의 민감도 시나리오를 기본값으로 둔다(2027-11 시작).
+    // 보고서 최종본 표 24의 민감도 시나리오(2027-11 시작 = 13개월 차). 한 번에 하나씩 기본안과 비교한다.
     var st = '2027-11';
     return [
       { type: 'incomeDrop', enabled: true, start: st, months: 6, value: 0.2, living: 185 },
       { type: 'jobLoss', enabled: false, start: st, months: 3, value: 0, living: 165, pausePension: true },
-      { type: 'livingRise', enabled: false, start: '2026-11', months: 0, value: 0.023 },
-      { type: 'depositTargetRise', enabled: false, value: 400 },
+      { type: 'bufferSkip', enabled: false, value: 5 },
+      { type: 'taxEndShock', enabled: false, value: 10 },
+      { type: 'livingRise', name: '비주거 생활비 상승(월세 고정)', enabled: false, start: st, months: 0, value: 0.023, steps: true, keepRent: true },
+      { type: 'livingRise', name: '생활비 전체 상승', enabled: false, start: st, months: 0, value: 0.023, steps: true },
       { type: 'investmentLoss', enabled: false, start: '2027-06', value: 0.2 },
       { type: 'depositDelay', enabled: false, value: 6 }
     ];
@@ -206,7 +208,7 @@
     var list = c.view.scn || defaultScenarios(c);
     var T = P.scenarios.SCENARIO_TYPES;
     var form = '<form data-submit="scenario-run">' + ui.table(['비교', '충격', '시작월', '기간(개월, 0=끝까지)', '크기', '기간 중 대응'], list.map(function (s, i) {
-      var t = T[s.type];
+      var t = Object.assign({}, T[s.type], s.name ? { label: s.name } : {});
       var val = PCT_TYPES[s.type] ? Math.round(s.value * 1000) / 10 : s.value;
       return [
         { html: '<input type="radio" name="pick" value="' + i + '" aria-label="' + t.label + ' 선택"' + (s.enabled ? ' checked' : '') + '>' },
@@ -224,7 +226,7 @@
     var b = engine.rowAt(r.base, tm);
     var s = engine.rowAt(r.shocked, engine.rowAt(r.shocked, tm) ? tm : r.shocked.input.targetMonth);
     var picked = list.filter(function (x) { return x.enabled; })[0];
-    var chart = ui.scenarioChart(r, picked ? T[picked.type].label : '충격 없음');
+    var chart = ui.scenarioChart(r, picked ? (picked.name || T[picked.type].label) : '충격 없음');
     return '<section class="card"><h2>충격 시나리오</h2><p class="small muted">확률이 아니라 "이 충격이 오면"의 조건부 결과입니다. 그래프가 복잡해지지 않도록 기본안과 선택한 시나리오 하나씩 비교합니다.</p>' + form + '</section>' +
       '<section class="card"><p class="conclusion">' + ui.esc(r.sentences.join(' ')) + '</p>' +
       '<div class="kpis k4">' + ui.kpi('판정(충격 없음)', ui.judgementBadge(r.base.judgement)) + ui.kpi('판정(충격 적용)', ui.judgementBadge(r.shocked.judgement)) +
@@ -277,7 +279,7 @@
           return [{ html: ui.esc(x.name), cls: 'l' }, { html: ui.badge(x.eligibility.status) }, '<span class="num">' + ui.esc(x.maturity) + '</span>',
             { html: x.targetFunding ? ui.badge('목표일 전 만기', 'ok') : ui.badge('목표일 재원 아님', 'warn') }, ui.esc(x.checkedAt)];
         }), { caption: '정책상품 적합성' }) +
-        '<p class="small muted">청년미래적금: 신청 이력이 없고, 총급여·재직 연차만으로 우대형(12%)을 확정할 수 없으며(가구소득·심사 필요), 지금 가입해도 만기가 목표일보다 늦습니다. 재직자 우대 저축공제: 회사 참여와 지원비율이 확인되지 않았습니다. 이사 후 장기목표로 다시 검토합니다(사례 보고서 9장).</p></section>';
+        '<p class="small muted">청년미래적금: 신청 이력이 없고, 총급여·재직 연차만으로 우대형(12%)을 확정할 수 없으며(가구소득·심사 필요), 지금 가입해도 만기가 목표일보다 늦습니다. 재직자 우대 저축공제: 회사 참여와 지원비율이 확인되지 않았습니다. 이사 후 장기목표로 다시 검토합니다(사례 보고서 최종본 9장 표 23).</p></section>';
     }
     return '<section class="card"><p class="conclusion">정책상품을 넣으면 이사월(' + ui.esc(r.targetMonth) + ')에 쓸 돈이 <strong>' + fmt.num1(Math.abs(r.diff)) + '만원 ' + (r.diff >= 0 ? '많아집니다' : '적어집니다') + '</strong>(정부기여분에서 납입액에 붙지 못한 이자를 뺀 차이).</p>' +
       ui.table(['구분', '이사 때 쓸 돈', '판정'], [
@@ -317,27 +319,27 @@
       ui.bankCard(c);
   };
 
-  /** 은행 예·적금 후보(사례 보고서 표 12) — 같은 월 납입·기간·세금 가정 */
+  /** 적금 후보(사례 보고서 최종본 표 16) — 같은 월 납입·기간·세금 가정 */
   ui.bankCard = function (c) {
     var bm = c.view.bankMonthly || 80;
     var bn = c.view.bankMonths || 21;
     var bl = c.view.bankLump || 1000;
     var start = c.view.bankStart || '2027-07';
     var rows = P.models.compareBank(c.state, c.state.activePlanId, bm, bn, bl, start);
-    return '<section class="card"><h2>은행 예·적금 후보 비교</h2>' +
+    return '<section class="card"><h2>적금 후보 비교(같은 납입 조건)</h2>' +
       '<form data-submit="bank-run" class="form-inline">' +
       '<div class="field"><label for="bk-m">적금 월 납입(만원)</label><input id="bk-m" name="m" type="number" min="1" step="1" value="' + ui.esc(bm) + '"></div>' +
       '<div class="field"><label for="bk-n">기간(개월)</label><input id="bk-n" name="n" type="number" min="1" max="36" step="1" value="' + ui.esc(bn) + '"></div>' +
-      '<div class="field"><label for="bk-l">예금 원금(만원)</label><input id="bk-l" name="l" type="number" min="100" step="10" value="' + ui.esc(bl) + '"></div>' +
       '<div class="field"><label for="bk-s">가입월</label><input id="bk-s" name="s" type="month" value="' + ui.esc(start) + '"></div>' +
       '<button class="btn" type="submit">비교</button></form>' +
-      ui.table(['상품', '설계상 용도', '적용 금리(기본 / 우대)', '원금', '세후 만기금(기본)', '세후 만기금(우대 충족 시)', '만기', '목표일 재원', '확인일'], rows.map(function (x) {
-        if (x.payout === undefined) return [{ html: ui.esc(x.name), cls: 'l' }, { html: ui.esc(x.use), cls: 'l' }, { html: ui.esc(x.note), cls: 'l' }, '—', '—', '—', '—', '—', ui.esc(x.checkedAt)];
-        return [{ html: '<a href="' + ui.esc(x.source.url) + '" target="_blank" rel="noopener">' + ui.esc(x.name) + '</a>', cls: 'l' }, { html: ui.esc(x.use), cls: 'l' },
-          (x.baseRate * 100).toFixed(2) + '%' + (x.prefRate ? ' / ' + (x.prefRate * 100).toFixed(2) + '%' : ''), ui.n1(x.principal), ui.n1(x.payout), x.payoutPref === null ? '—' : ui.n1(x.payoutPref), x.maturity,
+      ui.table(['상품', '기본 / 최대 우대 금리', '원금', '세후 이자(기본)', '세후 이자(최대 우대)', '판단할 사항', '만기', '목표일 재원', '확인일'], rows.map(function (x) {
+        if (x.payout === undefined) return [{ html: ui.esc(x.name), cls: 'l' }, { html: ui.esc(x.note), cls: 'l' }, '—', '—', '—', { html: ui.esc(x.use), cls: 'l' }, '—', '—', ui.esc(x.checkedAt)];
+        return [{ html: '<a href="' + ui.esc(x.source.url) + '" target="_blank" rel="noopener">' + ui.esc(x.name) + '</a>', cls: 'l' },
+          (x.baseRate * 100).toFixed(2) + '%' + (x.prefRate ? ' / ' + (x.prefRate * 100).toFixed(2) + '%' : ''), ui.n1(x.principal), ui.n1(x.payout - x.principal), x.payoutPref === null ? '—' : ui.n1(x.payoutPref - x.principal),
+          { html: ui.esc(x.conditions || ''), cls: 'l' }, x.maturity,
           { html: x.targetFunding ? ui.badge('목표일 전 만기', 'ok') : ui.badge('목표일 재원 아님', 'warn') }, ui.esc(x.checkedAt)];
       }), { caption: '은행 예·적금 후보' }) +
-      '<p class="small muted">금리는 조사일(2026-11-03, 사례 보고서 표 12) 공시 기준 세전 연이율이며, 가입할 때 같은 금리·판매가 유지된다는 뜻이 아닙니다. 적금 이자 근사 = 월 납입 × 연이율 × n(n+1)/24(실제 지급액은 납입일·일수·원단위 처리에 따라 다름), 세금 15.4%(이자소득세 14% + 지방소득세 1.4%). 우대금리는 조건 충족을 확인할 때만 반영합니다. 예금자보호는 금융회사별 1인당 원금과 소정의 이자를 합해 1억 원까지입니다. 특정 상품을 추천하지 않습니다.</p></section>';
+      '<p class="small muted">금리는 상품별 확인일의 공시 기준 세전 연이율이며(사례 보고서 표 16), 가입할 때 같은 금리가 유지된다는 뜻이 아닙니다. 세후 이자 ≈ 월 납입 × 연이율 × n(n+1)/24 × (1 − 15.4%)(월 단위 근사, 실제 지급액은 납입일별 일수에 따라 다름). 우대금리는 기존 소비·급여 흐름에서 조건을 충족할 때만 비교하고, 우대를 받으려고 소비를 늘리지 않습니다. 이자는 금리가 바뀔 수 있어 목표 재원에 넣지 않습니다. 예금자보호는 금융회사별 1인당 원금과 소정의 이자를 합해 1억 원까지입니다. 특정 상품을 추천하지 않습니다.</p></section>';
   };
 
   Object.assign(ui.actions, {

@@ -172,6 +172,10 @@
       products: products,
       initial: applyInitial(customer, plan.initial || state.initial),
       pensionMonthly: Math.max(0, num(plan.pensionMonthly)),
+      // 주거 완충저축(보고서 '보완저축'): 잉여 가운데 이 금액은 비상금보다 먼저 주거자금으로 보낸다(비상금 복구 중에는 제외)
+      housingFirst: Math.max(0, num(plan.housingFirst)),
+      // 은행 적금 이자를 목표 재원에 넣을지(false면 원금만 주거자금에 넣고 이자는 참고로만 기록). 옵션이 계획보다 우선
+      bankInterest: opts.includeBankInterest !== undefined ? !!opts.includeBankInterest : plan.countBankInterest !== false,
       depositReturn: customer.depositReturn || null,
       assumptions: assumptions,
       goal: goal,
@@ -298,15 +302,28 @@
       }
       // 남은 예산(대상 없음)은 상환하지 않고 잉여로 넘어간다 — 아래 잉여 식에 자동 반영
 
-      // 6-1. 이번 달 상품 납입액
-      var productPay = 0;
-      input.products.forEach(function (p) {
-        if (inWindow(t, p.start, p.months)) productPay += p.monthly;
-      });
-
-      // 6-2. 연금저축 납입(주거·비상금 재원이 아님). 시나리오로 멈출 수 있다.
+      // 6-0. 연금저축 납입(주거·비상금 재원이 아님). 시나리오로 멈출 수 있다.
       var pensionPay = input.pensionMonthly;
       if (typeof hooks.pension === 'function') pensionPay = Math.max(0, num(hooks.pension(pensionPay, ctx)));
+
+      // 비상금 복구 중: 한 번 채운 비상금이 다시 모자란 달(보고서 실직 복구 경로 — 복구가 끝날 때까지 비상금이 먼저)
+      var recovering = emergencyReached !== null && em < emTarget - EPS;
+      var hfPlan = recovering ? 0 : input.housingFirst;
+      if (typeof hooks.housingFirst === 'function') hfPlan = Math.max(0, num(hooks.housingFirst(hfPlan, ctx)));
+
+      // 6-1. 이번 달 상품 납입액. 은행 자유적금(flexible)은 여유만큼만 넣고, 비상금 복구 중에는 쉰다.
+      var productPay = 0;
+      var payNow = {};
+      var room = income - essential - optional - interest - principal - pensionPay - hfPlan;
+      input.products.forEach(function (p) {
+        payNow[p.key] = 0;
+        if (!inWindow(t, p.start, p.months)) return;
+        var amt = p.monthly;
+        if (p.type === 'bank' && p.flexible) amt = recovering ? 0 : Math.max(0, Math.min(p.monthly, room));
+        room -= amt;
+        payNow[p.key] = amt;
+        productPay += amt;
+      });
 
       // 4. 잉여
       var surplus = income - essential - optional - interest - principal - productPay - pensionPay;
@@ -322,9 +339,9 @@
       // 6. 상품 적립·만기(만기월 = 시작월 + 기간, 그 달에는 납입 없음)
       var maturity = 0;
       input.products.forEach(function (p) {
-        if (inWindow(t, p.start, p.months)) {
-          prodBal[p.key] += p.monthly * (1 + p.contributionRate);
-          prodContrib[p.key].push({ t: t, amount: p.monthly });
+        if (inWindow(t, p.start, p.months) && payNow[p.key] > 0) {
+          prodBal[p.key] += payNow[p.key] * (1 + p.contributionRate);
+          prodContrib[p.key].push({ t: t, amount: payNow[p.key] });
         }
         if (p.months > 0 && t === dates.parseYM(p.start) + p.months) {
           var payout = prodBal[p.key];
@@ -332,8 +349,8 @@
             // 은행 적금(단리): 회차별 납입액 × 연이율 × 운용개월/12. 첫 회 n개월 … 마지막 회 1개월. 세금은 이자에만.
             var pre = prodContrib[p.key].reduce(function (s2, c) { return s2 + c.amount * num(p.rate) * (t - c.t) / 12; }, 0);
             var tax = p.taxFree ? 0 : pre * num(p.taxRate);
-            payout += pre - tax;
-            events.push({ type: 'productMaturity', month: ym, label: p.name + ' 만기', amount: payout, interest: pre - tax });
+            if (input.bankInterest) payout += pre - tax;
+            events.push({ type: 'productMaturity', month: ym, label: p.name + ' 만기', amount: payout, interest: pre - tax, interestCounted: input.bankInterest });
           } else {
             events.push({ type: 'productMaturity', month: ym, label: p.name + ' 만기', amount: payout });
           }
@@ -355,8 +372,11 @@
       var emIn = 0;
       var hoIn = 0;
       var deficit = 0;
+      var bufferIn = 0;
       if (surplus >= 0) {
-        emIn = Math.min(Math.max(0, emTarget - em), surplus);
+        // 주거 완충저축: 비상금보다 먼저 주거로(비상금 복구 중에는 제외 — 위 hfPlan)
+        bufferIn = Math.min(hfPlan, surplus);
+        emIn = Math.min(Math.max(0, emTarget - em), surplus - bufferIn);
         hoIn = surplus - emIn;
       } else {
         var need = -surplus;
@@ -403,7 +423,10 @@
       var debtHigh = highOf();
       var productBalance = 0;
       for (var key in prodBal) productBalance += prodBal[key];
-      var usable = ho + (a.includeInvestmentInHousing ? inv : 0);
+      // 은행 적금은 주거 목적이라 만기 전 납입 원금도 주거재원(누적 조달액)에 넣는다. 정책상품은 예전처럼 만기에 넣는다.
+      var bankBal = 0;
+      input.products.forEach(function (p) { if (p.type === 'bank') bankBal += prodBal[p.key]; });
+      var usable = ho + bankBal + (a.includeInvestmentInHousing ? inv : 0);
 
       if (payoffAll === null && hadDebt && debtTotal <= EPS) {
         payoffAll = ym;
@@ -440,6 +463,7 @@
         emergencyIn: emIn,
         emergency: em,
         housingIn: hoIn,
+        bufferIn: bufferIn,
         depositReturn: depositIn,
         productMaturity: maturity,
         housing: ho,

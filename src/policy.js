@@ -128,6 +128,7 @@
         rate: num(p.rate),
         taxRate: p.taxRate === undefined ? 0.154 : num(p.taxRate),
         taxFree: !!p.taxFree,
+        flexible: !!p.flexible, // 자유적금: 여유만큼 납입, 비상금 복구 중에는 쉼
         sourceId: p.sourceId || null
       });
     });

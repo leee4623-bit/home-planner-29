@@ -171,12 +171,24 @@
   };
 
   /*
-   * 시연 고객: AFPK 영 플래너 챌린지 2026 재무설계 사례 보고서의 가상 고객(B안).
+   * 시연 고객: AFPK 영 플래너 챌린지 2026 재무설계 사례 보고서(최종 수정 2026-11-10)의 가상 고객(B안).
    * 기준일 2026-11-03, 금액 단위 만원. 보고서에 없는 값은 '계산용 가정'으로 표시한다.
    */
   var DEMO = {
     schemaVersion: 1,
-    demoVersion: 4,
+    demoVersion: 5,
+    // 가구 전세 조달(보고서 표 5·9·18·19, 추가 가상 설정·실행 가정). 승인 전 대출은 조건부 재원이다.
+    household: {
+      note: '배우자 정보·전세대출·계약 일정은 보고서의 추가 가상 설정과 실행 가정입니다(실제 계약 아님).',
+      home: '부천시 소사구 괴안동 삼익3차 전용 56.67㎡ 저층 전세(후보)',
+      deposit: 22200,             // 20,000 × 1.036^(35/12) = 22,173.2 → 100 단위 올림
+      downPayment: 2220,          // 보증금의 10% 가정
+      contractMonth: '2029-07',   // 2029.07.30 계약
+      settleMonth: '2029-10',     // 2029.10.30 보증금 반환·대출 실행·잔금
+      spouse: { netMonthly: 210, initial: 1400, monthly: 50, months: 36 },
+      loan: { amount: 15000, label: '신혼부부전용 전세대출(승인 전 조건부)', rateRef: 0.033, upkeep: 20 },
+      bufferMin: 100              // 지급 후 비상금과 별도로 남길 최소 완충자금(이 사례의 실행 기준)
+    },
     demoToday: '2026-11-03',
     intake: { done: true, source: 'example', savedAt: '2026-11-03' },
     // 자가진단 응답(고객 본인 응답, 공식 투자성향 진단 아님) — 재무 수치(customer)와 따로 둔다
@@ -185,10 +197,10 @@
       answers: { keepSpending: '부모 지원, 건강·자기계발 지출 유지', spendFlex: '', incomeStability: '', lossTolerance: '원금손실은 피하고 싶다', newLoanPref: '결혼 전 신규 신용대출 추가 없음', memo: '' }
     },
     activePlanId: 'after-v1',
-    caseSource: 'AFPK 영 플래너 챌린지 2026 재무설계 사례 보고서(가상 고객 B안, 기준일 2026-11-03)',
+    caseSource: 'AFPK 영 플래너 챌린지 2026 재무설계 사례 보고서(가상 고객 B안, 기준일 2026-11-03, 최종 수정 2026-11-10)',
 
     // 초기 고객정보(사실만). 화면의 '설계 예시 불러오기'와 같은 값이다(src/intake.js EXAMPLE, 테스트로 일치 확인).
-    // 생활비 200·대출 700 상환·연금 월 10·목적자금 110 같은 설계 내용은 아래 plans의 설계안에만 둔다.
+    // 생활비 195·대출 700 상환·연금 월 10·완충저축 5·목적자금 110 같은 설계 내용은 아래 plans의 설계안에만 둔다.
     customer: {
       name: '가상 고객 B',
       age: 29,
@@ -203,7 +215,8 @@
       region: '',
       grossPrevYear: 4500,
       netMonthly: 320,
-      taxExemption: null,       // 중소기업 취업자 소득세 감면: 실수령 320에 반영됐는지 확인 필요(보고서 9장)
+      // 중소기업 취업자 소득세 감면(보고서 표 4·23 추가 가상 설정): 2024.05.01 취업 → 2029.05 말 종료, 이후 월 실수령 7 감소(320 → 313)
+      taxExemption: { applied: true, end: '2029-05', monthlyEffect: 7, note: '2024.05.01 감면대상 취업 가정, 2029.05 말 종료' },
       cash: 200,
       savings: 600,             // 만기 예·적금(해지손실 없음)
       emergency: 0,
@@ -257,25 +270,27 @@
         kind: '설계 후',
         date: '2026-11-03',
         name: '설계 후 1차(보고서 설계안)',
-        memo: '대출 700 부분 상환 · 생활비 235→200(식비 −15·구독 −3·여가 −17) · 남는 110을 대출→비상금→주거 순 배분 · 연금 월 10 · 2027-07부터 자유적금 월 80 + 주거 유동자금 월 30',
+        memo: '대출 700 부분 상환 · 생활비 235→195(식비 −15·구독 −3·여가 −22) · 주거 완충저축 월 5를 처음부터 주거로 · 나머지 110을 대출→비상금→주거 순 배분 · 연금 월 10 · 2027-07부터 자유적금 월 80 + 주거 유동자금 월 30 · 원금 기준(적금 이자는 재원에 넣지 않음)',
         startMonth: '2026-11',
         targetMonth: '2029-10',
         essential: 165,
-        optional: 35,
+        optional: 30,               // 여가 20 + 비정기 10
         extraRepayment: 0,
         pensionMonthly: 10,
+        housingFirst: 5,            // 주거 완충저축(보완저축) 월 5: 대출 상환 기간부터 매월 주거로(보고서 표 13·14)
+        countBankInterest: false,   // 최종 기준은 원금 4,311.4 — 적금 이자는 재원에 넣지 않는다(보고서 7장)
         debtOverrides: { '신용대출': { monthlyPrincipal: 100 } }, // 남은 300을 3개월에 상환(월 원금 100 + 이자)
         initial: { liquidate: ['savings', 'investment'], repayFromCash: 700, emergencyFromCash: 500 },
         products: [
-          { type: 'bank', name: '카카오뱅크 자유적금(21개월)', monthly: 80, start: '2027-07', months: 21, rate: 0.0385, prefRate: 0.0405, sourceId: 'kakao-savings', contributionRate: 0, conditional: true }
+          { type: 'bank', name: '카카오뱅크 자유적금(21개월)', monthly: 80, start: '2027-07', months: 21, rate: 0.0385, prefRate: 0.0405, sourceId: 'kakao-savings', contributionRate: 0, conditional: true, flexible: true }
         ],
         parentId: 'before-v1',
         author: '설계사',
         selectedBy: '고객(가상)',
         selectedAt: '2026-11-03',
         selectionNote: '보고서의 설계상 선택이며 실제 고객 동의·상품 가입·대출 상환은 이루어지지 않음',
-        // 보고서 표 9의 조정 후 생활비(만원/월). 고객정보의 기존 생활비와 따로 둔다.
-        livingAdjust: [['식비·생필품', 60, 45], ['통신·구독', 8, 5], ['여가·쇼핑', 42, 25]]
+        // 보고서 표 13의 조정 후 생활비(만원/월). 고객정보의 기존 생활비와 따로 둔다.
+        livingAdjust: [['식비·생필품', 60, 45], ['통신·구독', 8, 5], ['여가·쇼핑', 42, 20]]
       }
     ],
 
@@ -293,23 +308,24 @@
     },
 
     assumptionNotes: {
-      livingGrowth: '기본안은 생활비 200을 유지합니다. 물가 상승은 충격 시나리오(생활비 상승)와 민감도 분석에서 따로 봅니다.',
+      livingGrowth: '기본안은 생활비 195를 유지합니다. 물가 상승은 충격 시나리오(생활비 상승, 13·25개월 차 2.3%)에서 따로 봅니다.',
       emergencyRate: '비상금 이자는 금리가 바뀔 수 있어 목표 재원에 넣지 않습니다(0%).',
-      housingRate: '기본 계산은 원금 기준(0%)입니다. 적금 이자는 상품 만기에, 공통 비교모형은 세후 연 2%로 따로 보여 줍니다.',
+      housingRate: '최종 기준은 원금(0%)입니다. 적금 세후 이자는 참고로만 보여 주고 재원에 넣지 않습니다. 세후 연 2% 비교모형은 과거 모형으로 쓰지 않습니다.',
       investmentRate: 'ETF는 설계안 실행 직전에 현금화합니다(수익 가정 없음).',
       highRateThreshold: '연 4% 이상인 부채를 고금리로 봅니다.',
       includeInvestmentInHousing: '현금화하지 않은 투자자산은 사용 가능 주거자금에 넣되 가격 변동을 따로 표시합니다.',
       rateBasis: '월 이율 = (1 + 연 유효수익률)^(1/12) − 1 (보고서 공통 비교모형과 같은 방식).',
-      compareRate: '공통 비교모형(B)의 세후 연 유효수익률 2%. 특정 상품의 만기금이 아닙니다.'
+      compareRate: '과거 비교모형의 세후 연 2%(최종 기준에서 제외).'
     },
 
     settings: {
       alerts: {
-        overspendTolerance: 0,      // 생활비 200 초과
-        overspendConsecutive: 2,    // 2개월 연속이면 경보(보고서 표 20)
+        overspendTolerance: 0,      // 생활비 195 초과
+        overspendConsecutive: 2,    // 2개월 연속이면 경보(보고서 표 27)
         emergencyMinMonths: 5,      // 825 = 필수생활비 165 × 5개월
         emergencyAfterReached: true, // 비상금 완성 이후에만 판단
-        incomeDropRate: 0.1         // 실수령 10% 이상 감소
+        incomeDropRate: 0.1,        // 실수령 10% 이상 감소
+        bufferMissed: true          // 주거 완충저축(월 5) 미납(보고서 표 27)
       }
     },
 

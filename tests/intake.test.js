@@ -20,8 +20,9 @@ test('설계 예시를 불러와 저장한 상태는 시연 데이터와 계산 
   for (const pid of ['before-v1', 'after-v1']) {
     assert.ok(maxDiff(engine.runPlan(r.state, pid).rows, engine.runPlan(d, pid).rows) < 1e-9, pid);
   }
-  const row = engine.rowAt(engine.runPlan(r.state, 'after-v1', { excludeBankProducts: true, assumptionOverrides: { housingRate: 0 } }), '2029-10');
-  assert.ok(Math.abs(row.usable - 4166.4) < 0.05);
+  const row = engine.rowAt(engine.runPlan(r.state, 'after-v1'), '2029-10');
+  assert.ok(Math.abs(row.usable - 4311.4) < 0.05); // 보고서 최종본 원금 기준
+  assert.deepEqual(r.state.household, demo.getDemo().household);
 });
 
 test('시연 데이터의 고객정보는 설계 예시 입력으로 만든 것과 같다', () => {
@@ -31,7 +32,7 @@ test('시연 데이터의 고객정보는 설계 예시 입력으로 만든 것�
   assert.equal(St.createStore(null).reset().customer.name, '가상 고객 B');
 });
 
-test('초기 고객정보에는 설계안(생활비 200·대출 700 상환·연금 10)을 사실처럼 넣지 않는다', () => {
+test('초기 고객정보에는 설계안(생활비 195·대출 700 상환·연금 10·완충저축 5)을 사실처럼 넣지 않는다', () => {
   const s = I.buildState(I.exampleValues(), 'example').state;
   const c = s.customer;
   assert.equal(c.debts[0].balance, 1000);
@@ -45,7 +46,9 @@ test('초기 고객정보에는 설계안(생활비 200·대출 700 상환·연�
   assert.equal(c.livingDetail, undefined);
   // 설계안은 계획 버전에 따로 있다
   const after = s.plans.find((p) => p.id === 'after-v1');
-  assert.equal(after.essential + after.optional, 200);
+  assert.equal(after.essential + after.optional, 195);
+  assert.equal(after.housingFirst, 5);
+  assert.equal(before.housingFirst, undefined);
   assert.equal(after.initial.repayFromCash, 700);
   assert.equal(after.pensionMonthly, 10);
   assert.equal(c.isExample, true);

@@ -5,11 +5,12 @@ const engine = require('../src/engine.js');
 const demo = require('../data/demo.js');
 const scenarios = require('../src/scenarios.js');
 const dates = require('../src/dates.js');
+const household = require('../src/household.js');
 const { CASES, runCase } = require('./cases.js');
 
 for (const c of CASES) {
   test(`${c.id} ${c.title}`, () => {
-    const r = runCase(c, { engine, demo, scenarios, dates });
+    const r = runCase(c, { engine, demo, scenarios, dates, household });
     const failed = r.checks.filter((x) => !x.pass);
     assert.deepEqual(
       failed.map((x) => `${x.label}: 기대 ${x.expected}, 실제 ${x.actual}`),

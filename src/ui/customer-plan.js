@@ -118,21 +118,40 @@
     opts = opts || {};
     var list = P.models.compare(c.state, c.state.activePlanId, c.d.recOpts);
     var tm = list[0].result.input.targetMonth;
-    // 좁은 화면에서도 읽히도록 표 대신 줄 목록으로 보여 준다.
-    var rows = '<ul class="rows">' + list.map(function (x) {
-      return '<li><div class="row-main"><div class="t">' + ui.esc(x.key) + ' · ' + ui.esc(x.condition) + '</div>' +
-        '<div class="s">마지막 월 납입 제외 <span class="num">' + fmt.num1(x.paydayUsable) + '</span> (' + ui.delta(x.paydayDiff, true) + ')</div></div>' +
-        '<div class="row-side"><strong class="num">' + fmt.num1(x.usable) + '</strong><br>' + ui.delta(x.diff, true) + '</div></li>';
-    }).join('') + '</ul>';
     var a = list[0];
+    var ref = list.filter(function (x) { return x.reference; })[0];
     var head = a.diff >= 0
-      ? '원금만으로도 목표(' + fmt.short(a.target) + ')를 ' + fmt.num1(a.diff) + '만원 넘지만 여유가 작아요.'
-      : '원금 기준으로는 목표(' + fmt.short(a.target) + ')보다 ' + fmt.num1(-a.diff) + '만원 모자라요.';
-    var pay = a.paydayDiff < 0 ? ' 잔금일이 ' + ui.esc(tm) + ' 월말 납입(' + fmt.num1(a.lastMonthIn) + ')보다 빠르면 원금 기준 ' + fmt.num1(-a.paydayDiff) + '만원이 부족해요.' : '';
-    return '<section class="card" aria-labelledby="models-h"><h2 id="models-h">계산 조건별 결과 · ' + ui.esc(tm) + ' 말</h2>' +
-      '<p class="conclusion">' + head + pay + '</p>' +
-      rows + '<p class="small muted">오른쪽 큰 숫자는 ' + ui.esc(tm) + ' 말 사용 가능 주거자금, 그 아래는 목표(' + fmt.short(a.target) + ') 대비 차이예요.</p>' +
-      '<p class="small muted">세 수치는 같은 납입 계획을 서로 다른 조건으로 계산한 결과라 합산하지 않습니다. B는 특정 은행 상품의 만기금이 아니고, C는 미래 금리를 확정한 값이 아닙니다. 계약 전에는 급여일·적금 만기일·보증금 반환일·계약금·잔금일을 대조한 지급일별 가용자금표로 다시 확인하세요.</p></section>';
+      ? '원금 기준(최종 판단 기준)으로 ' + ui.esc(ui.ymText(tm)) + ' 말 본인 주거재원 ' + fmt.num1(a.usable) + '만원, 목표(' + fmt.short(a.target) + ')보다 ' + fmt.num1(a.diff) + '만원 많아요.'
+      : '원금 기준(최종 판단 기준)으로 목표(' + fmt.short(a.target) + ')보다 ' + fmt.num1(-a.diff) + '만원 모자라요.';
+    var row = function (l, v, s2) { return '<li><div class="row-main"><div class="t">' + l + '</div>' + (s2 ? '<div class="s">' + s2 + '</div>' : '') + '</div><div class="row-side"><strong class="num">' + v + '</strong></div></li>'; };
+    return '<section class="card" aria-labelledby="models-h"><h2 id="models-h">본인 주거재원 · ' + ui.esc(tm) + ' 말</h2>' +
+      '<p class="conclusion">' + head + '</p><ul class="rows">' +
+      row('원금 기준(이자 제외, 기존 보증금 반환 포함)', fmt.num1(a.usable), '목표 대비 ' + ui.delta(a.diff, true)) +
+      row('마지막 달 적립(' + fmt.num1(a.lastMonthIn) + ') 전에 써야 할 때', fmt.num1(a.paydayUsable), '목표 대비 ' + ui.delta(a.paydayDiff, true)) +
+      (ref ? row('참고: 적금 세후 이자를 더하면', fmt.num1(ref.usable), '이자 ' + fmt.num1(ref.usable - a.usable) + '은 금리가 바뀔 수 있어 재원에 넣지 않아요') : '') +
+      '</ul><p class="small muted">이자 수익을 넣지 않은 원금 기준이 최종 판단 기준이에요. 실제 계약 실행은 아래 가구 조달표의 지급 후 잔액(완충자금 기준)으로 따로 판단해요.</p></section>' +
+      (ui.householdCard ? ui.householdCard(c) : '');
+  };
+
+  /** 가구 전세 조달·지급일 잔액(보고서 표 2·9·19·21) */
+  ui.householdCard = function (c) {
+    var res = c.d.current;
+    var h = P.household.compute(c.state, res);
+    if (!h) return '';
+    var hh = c.state.household;
+    var kv = function (l, v, cls) { return '<li><span>' + l + '</span><span class="num' + (cls ? ' ' + cls : '') + '">' + v + '</span></li>'; };
+    return '<section class="card" aria-labelledby="hh-h"><div class="card-head"><h2 id="hh-h">가구 전세 조달과 지급 후 잔액</h2>' + ui.badge(h.ok ? '완충자금 충족' : '완충자금 미달', h.ok ? 'good' : 'bad') + '</div>' +
+      '<p class="conclusion">모든 지급을 마친 뒤 비상금과 별도로 ' + fmt.num1(h.after) + '만원이 남아요(최소 완충자금 ' + fmt.short(h.bufferMin) + ' ' + (h.ok ? '충족, 추가 여유 ' + fmt.num1(h.margin) : '미달') + '). ' +
+      '두 사람의 마지막 달 적립(본인 ' + fmt.num1(h.ownLast) + '·배우자 ' + fmt.short(h.spouseLast) + ') 전에 잔금을 치르면 ' + fmt.num1(h.early) + '만 남아 기준에 ' + (h.early >= h.bufferMin ? '맞아요' : '모자라요(추가 재원 ' + fmt.num1(h.earlyNeed) + ' 필요)') + '.</p>' +
+      '<ul class="kv">' + kv('본인 주거재원', fmt.num1(h.own)) + kv('배우자 분담', fmt.num1(h.spouseTotal)) + kv(ui.esc(hh.loan.label || '전세대출'), fmt.num1(h.loan) + (h.loanRatio ? ' <span class="small muted">(보증금의 ' + fmt.short(h.loanRatio * 100) + '%)</span>' : '')) +
+      kv('가구 조달 합계', fmt.num1(h.funding)) + kv('전세보증금 + 부대비용', fmt.num1(h.deposit) + ' + ' + fmt.num1(h.moving)) + kv('<strong>지급 후 잔액</strong>', '<strong>' + fmt.num1(h.after) + '</strong>', h.ok ? 'up' : 'down') + '</ul>' +
+      ui.fold('본인 계좌의 지급일 흐름', '<ul class="kv">' + h.flow.map(function (f) { return kv(ui.esc(f.label) + ' <span class="small muted">' + ui.esc(f.note) + '</span>', fmt.num1(f.balance)); }).join('') + '</ul>' +
+        '<p class="small muted">누적 조달액(주거자금 그래프)과 계약금을 낸 뒤의 실제 계좌잔액은 다릅니다. 계약금은 지급한 달에 잔액에서 빠져요.</p>') +
+      ui.fold('조건이 바뀌면', '<ul class="kv">' +
+        kv('부대비용 한계(완충자금 ' + fmt.short(h.bufferMin) + ' 유지)', fmt.num1(h.movingLimit) + '까지') +
+        kv('배우자 자금 500 감소 시 지급 후 잔액', fmt.num1(h.spouseCut500), h.spouseCut500 < h.bufferMin ? 'down' : '') +
+        kv('전세보증금 10% 상승(' + fmt.num1(h.depositUp10.deposit) + ') 시 필요 대출', fmt.num1(h.depositUp10.loanNeeded)) + '</ul>') +
+      '<p class="small muted">' + ui.esc(hh.note || '') + ' 대출은 승인 전에는 확정 재원이 아니고, 결혼비용은 이 재원에서 빼지 않는다는 조건이에요.</p></section>';
   };
 
   ui.screens.plan = function (c) {

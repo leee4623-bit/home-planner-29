@@ -1,9 +1,9 @@
 /*
- * 계산 조건별 결과(보고서 표 2·표 19). 같은 납입 계획을 서로 다른 조건으로 계산하므로 합산하지 않는다.
- *  A. 원금 기준 검증: 주거자금 수익률 0%, 은행 적금 이자도 빼고 원금만
- *  B. 공통 비교모형: 세후 연 유효수익률(기본 2%)로 월별 반복 계산, 은행 적금은 같은 돈이 주거계좌에 들어간 것으로 봄
- *  C. 실제 상품 적용 예시: 계획에 넣은 은행 적금의 조사일 기본금리가 가입 시에도 같다는 조건(주거 유동자금 이자 0%)
- * 그리고 '지급일 예상 가용자금': 목표월의 마지막 월말 납입을 잔금일 전에 쓸 수 없다고 볼 때의 금액.
+ * 계산 조건별 결과(보고서 표 2·16, 부록 6). 같은 납입 계획을 서로 다른 조건으로 계산하므로 합산하지 않는다.
+ *  A. 원금 기준(최종 판단 기준): 주거자금 수익률 0%, 적금 이자 제외
+ *  C. 적금 이자 참고: 계획에 넣은 은행 적금의 조사일 기본금리 세후 이자를 더한 값(재원에는 넣지 않음)
+ * 과거의 세후 연 2% 비교모형(B)은 최종 기준에서 제외했다(보고서 부록 6). compare(…, {withB:true})로만 계산한다.
+ * '마지막 월 적립 제외': 목표월의 마지막 월말 적립을 잔금일 전에 쓸 수 없다고 볼 때의 금액.
  */
 (function (root) {
   'use strict';
@@ -37,22 +37,24 @@
     return !!plan && (plan.products || []).some(function (p) { return p.type === 'bank'; });
   }
 
-  /** A·B·C 세 조건 결과. opts는 엔진 옵션(기록 반영 등)에 합쳐진다. */
+  /** A(원금, 최종 기준)와 C(적금 이자 참고). opts는 엔진 옵션(기록 반영 등)에 합쳐진다. */
   function compare(state, planId, opts) {
     opts = opts || {};
     var a = Object.assign({}, state.assumptions);
-    var rateB = a.compareRate === undefined ? 0.02 : num(a.compareRate);
     var merge = function (extra, ao) { return Object.assign({}, opts, extra, { assumptionOverrides: Object.assign({}, opts.assumptionOverrides, ao) }); };
     var A = engine.runPlan(state, planId, merge({ excludeBankProducts: true }, { housingRate: 0 }));
-    var B = engine.runPlan(state, planId, merge({ excludeBankProducts: true }, { housingRate: rateB, rateBasis: 'effective' }));
-    var out = [
-      summary(A, 'A', '원금 기준 검증 · 주거자금 수익률 0%'),
-      summary(B, 'B', '공통 비교모형 · 세후 연 ' + Math.round(rateB * 1000) / 10 + '% 유효수익률, 월별 반복 계산(특정 상품의 만기금 아님)')
-    ];
+    var out = [summary(A, 'A', '원금 기준(최종 판단 기준) · 수익률 0%, 적금 이자 제외')];
+    if (opts.withB) {
+      var rateB = a.compareRate === undefined ? 0.02 : num(a.compareRate);
+      var B = engine.runPlan(state, planId, merge({ excludeBankProducts: true }, { housingRate: rateB, rateBasis: 'effective' }));
+      out.push(summary(B, 'B', '과거 비교모형 · 세후 연 ' + Math.round(rateB * 1000) / 10 + '%(최종 기준에서 제외)'));
+    }
     if (hasBank(state, planId)) {
-      var C = engine.runPlan(state, planId, merge({}, { housingRate: 0 }));
-      var names = C.input.products.filter(function (p) { return p.type === 'bank'; }).map(function (p) { return p.name + ' 월 ' + p.monthly + '(조사일 기본금리 연 ' + Math.round(p.rate * 10000) / 100 + '%가 가입 시에도 같다는 조건)'; });
-      out.push(summary(C, 'C', '실제 상품 적용 예시 · ' + names.join(', ') + ' + 나머지는 이자 0%인 주거 유동자금'));
+      var C = engine.runPlan(state, planId, merge({ includeBankInterest: true }, { housingRate: 0 }));
+      var names = C.input.products.filter(function (p) { return p.type === 'bank'; }).map(function (p) { return p.name + ' 월 ' + p.monthly + '(조사일 기본금리 연 ' + Math.round(p.rate * 10000) / 100 + '%)'; });
+      var r = summary(C, 'C', '적금 세후 이자 참고 · ' + names.join(', ') + ' — 이자는 목표 재원에 넣지 않음');
+      r.reference = true;
+      out.push(r);
     }
     return out;
   }
